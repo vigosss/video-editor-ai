@@ -9,9 +9,16 @@ export default function Settings() {
       transition={{ duration: 0.3 }}
     >
       <div className="glass-card flex flex-col items-center justify-center py-20">
-        <SettingsIcon className="mb-4 h-16 w-16 text-dark-600" />
-        <p className="mb-2 text-lg text-dark-400">设置</p>
-        <p className="text-sm text-dark-500">配置 API Key、模型、输出格式等</p>
+        <div
+          className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl"
+          style={{
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1))',
+          }}
+        >
+          <SettingsIcon className="h-10 w-10 text-primary-400" />
+        </div>
+        <p className="mb-2 text-lg" style={{ color: 'var(--text-secondary)' }}>设置</p>
+        <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>配置 API Key、模型、输出格式等</p>
       </div>
     </motion.div>
   )

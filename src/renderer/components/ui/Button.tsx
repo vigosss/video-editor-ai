@@ -17,8 +17,8 @@ const variantStyles: Record<ButtonVariant, string> = {
   primary:
     'bg-gradient-to-r from-primary-500 to-accent-500 text-white hover:from-primary-600 hover:to-accent-600',
   secondary:
-    'bg-dark-700 text-dark-200 border border-dark-600 hover:bg-dark-600 hover:text-white',
-  ghost: 'bg-transparent text-dark-300 hover:bg-dark-800 hover:text-white',
+    'text-[var(--text-primary)] border border-[var(--border-color)] bg-[var(--card-bg)] backdrop-blur-sm hover:border-[var(--border-active)] hover:bg-[var(--bg-tertiary)]',
+  ghost: 'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]',
   danger: 'bg-red-600 text-white hover:bg-red-700',
 }
 
@@ -51,7 +51,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         whileTap={isDisabled ? undefined : { scale: 0.98 }}
         className={clsx(
           'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-900',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50',
           variantStyles[variant],
           sizeStyles[size],
           glow && variant === 'primary' && 'shadow-glow hover:shadow-glow-lg',

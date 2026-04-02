@@ -67,6 +67,11 @@ export default {
         // 辉光效果
         'glow-primary': 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%)',
         'glow-accent': 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
+        // 科技感网格背景
+        'grid-pattern': 'linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px)',
+        'dark-grid-pattern': 'linear-gradient(rgba(99, 102, 241, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(99, 102, 241, 0.06) 1px, transparent 1px)',
+        // 渐变边框
+        'border-gradient': 'linear-gradient(135deg, rgba(99, 102, 241, 0.5), rgba(139, 92, 246, 0.5), rgba(6, 182, 212, 0.5))',
       },
       boxShadow: {
         // 辉光阴影
@@ -75,6 +80,9 @@ export default {
         'glow-lg': '0 0 40px rgba(99, 102, 241, 0.5)',
         'glow-accent-sm': '0 0 10px rgba(139, 92, 246, 0.3)',
         'glow-accent': '0 0 20px rgba(139, 92, 246, 0.4)',
+        // 科技卡片阴影
+        'tech-card': '0 0 1px rgba(99, 102, 241, 0.3), 0 4px 20px rgba(0, 0, 0, 0.1)',
+        'dark-tech-card': '0 0 1px rgba(99, 102, 241, 0.5), 0 4px 24px rgba(0, 0, 0, 0.4)',
       },
       backdropBlur: {
         xs: '2px',
@@ -82,6 +90,10 @@ export default {
       animation: {
         'gradient-flow': 'gradient-flow 3s ease infinite',
         'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
+        'border-rotate': 'border-rotate 4s linear infinite',
+        'scan-line': 'scan-line 8s linear infinite',
+        'float': 'float 6s ease-in-out infinite',
+        'shimmer': 'shimmer 2s linear infinite',
       },
       keyframes: {
         'gradient-flow': {
@@ -91,6 +103,22 @@ export default {
         'pulse-glow': {
           '0%, 100%': { boxShadow: '0 0 10px rgba(99, 102, 241, 0.3)' },
           '50%': { boxShadow: '0 0 25px rgba(99, 102, 241, 0.6)' },
+        },
+        'border-rotate': {
+          '0%': { '--border-angle': '0deg' },
+          '100%': { '--border-angle': '360deg' },
+        },
+        'scan-line': {
+          '0%': { transform: 'translateY(-100%)' },
+          '100%': { transform: 'translateY(100%)' },
+        },
+        'float': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+        'shimmer': {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
         },
       },
     },

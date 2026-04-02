@@ -39,20 +39,24 @@ export function Header() {
 
   return (
     <header
-      className="flex h-9 shrink-0 items-center justify-between border-b border-dark-700/50 bg-dark-900/60 backdrop-blur-md"
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      className="relative flex h-9 shrink-0 items-center justify-between border-b backdrop-blur-xl"
+      style={{
+        background: 'var(--header-bg)',
+        borderColor: 'var(--border-color)',
+        WebkitAppRegion: 'drag',
+      } as React.CSSProperties}
     >
       {/* 左侧：macOS 红绿灯按钮留白 */}
       <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {isMac ? (
-          <div className="w-20" /> /* 为 macOS traffic lights 预留空间 */
+          <div className="w-20" />
         ) : (
           <div className="flex items-center px-3">
             {/* 主题切换按钮 */}
             <Button
               variant="ghost"
               onClick={toggleTheme}
-              className="h-6 w-6 rounded-md !p-0 text-dark-400 hover:text-white"
+              className="h-6 w-6 rounded-lg !p-0"
               title={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
             >
               {theme === 'dark' ? (
@@ -78,7 +82,7 @@ export function Header() {
           <Button
             variant="ghost"
             onClick={toggleTheme}
-            className="mr-2 h-6 w-6 rounded-md !p-0 text-dark-400 hover:text-white"
+            className="mr-2 h-6 w-6 rounded-lg !p-0"
             title={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
           >
             {theme === 'dark' ? (
@@ -95,7 +99,7 @@ export function Header() {
             <Button
               variant="ghost"
               onClick={handleMinimize}
-              className="h-9 w-11 rounded-none !p-0 text-dark-400 hover:bg-dark-700/50 hover:text-white"
+              className="h-9 w-11 rounded-none !p-0 hover:bg-[var(--bg-tertiary)]"
               title="最小化"
             >
               <Minus className="h-4 w-4" />
@@ -103,7 +107,7 @@ export function Header() {
             <Button
               variant="ghost"
               onClick={handleMaximize}
-              className="h-9 w-11 rounded-none !p-0 text-dark-400 hover:bg-dark-700/50 hover:text-white"
+              className="h-9 w-11 rounded-none !p-0 hover:bg-[var(--bg-tertiary)]"
               title={isMaximized ? '还原' : '最大化'}
             >
               {isMaximized ? (
@@ -124,7 +128,7 @@ export function Header() {
             <Button
               variant="ghost"
               onClick={handleClose}
-              className="h-9 w-11 rounded-none !p-0 text-dark-400 hover:bg-red-500 hover:text-white"
+              className="h-9 w-11 rounded-none !p-0 text-[var(--text-tertiary)] hover:bg-red-500 hover:text-white"
               title="关闭"
             >
               <X className="h-4 w-4" />

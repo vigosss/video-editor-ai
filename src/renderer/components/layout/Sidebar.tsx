@@ -17,7 +17,7 @@ const navItems = [
   { to: '/', icon: Home, label: '首页' },
   { to: '/projects', icon: FolderOpen, label: '项目列表' },
   { to: '/settings', icon: Settings, label: '设置' },
-  { to: '/about', icon: Info, label: '关于' },
+  // { to: '/about', icon: Info, label: '关于' },
 ]
 
 export function Sidebar() {
@@ -28,17 +28,32 @@ export function Sidebar() {
       initial={false}
       animate={{ width: sidebarCollapsed ? 72 : 220 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="relative flex h-full flex-col border-r border-dark-700/50 bg-dark-900/80 backdrop-blur-md"
+      className="relative flex h-full flex-col border-r backdrop-blur-xl"
+      style={{
+        background: 'var(--sidebar-bg)',
+        borderColor: 'var(--border-color)',
+      }}
     >
+      {/* 顶部渐变光线 */}
+      <div
+        className="absolute inset-x-0 top-0 h-px"
+        style={{
+          background: 'linear-gradient(90deg, transparent, var(--color-primary), var(--color-accent), transparent)',
+          opacity: 0.5,
+        }}
+      />
+
       {/* Logo 区域 */}
       <div
         className={clsx(
-          'flex items-center px-4',
+          'relative flex items-center px-4',
           sidebarCollapsed ? 'h-20 flex-col justify-center gap-2' : 'h-16 gap-3',
         )}
       >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-accent-500">
+        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-accent-500">
           <Scissors className="h-5 w-5 text-white" />
+          {/* Logo 辉光 */}
+          <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 opacity-50 blur-md" />
         </div>
         {!sidebarCollapsed ? (
           <>
@@ -54,7 +69,7 @@ export function Sidebar() {
               <Button
                 variant="ghost"
                 onClick={toggleSidebar}
-                className="h-7 w-7 rounded-md !p-0 text-dark-400 hover:bg-dark-800 hover:text-white"
+                className="h-7 w-7 rounded-lg !p-0"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -64,7 +79,7 @@ export function Sidebar() {
           <Button
             variant="ghost"
             onClick={toggleSidebar}
-            className="h-7 w-7 rounded-md !p-0 text-dark-400 hover:bg-dark-800 hover:text-white"
+            className="h-7 w-7 rounded-lg !p-0"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -80,19 +95,33 @@ export function Sidebar() {
             end={to === '/'}
             className={({ isActive }) =>
               clsx(
-                'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
                 isActive
-                  ? 'bg-gradient-to-r from-primary-500/20 to-accent-500/20 text-white shadow-glow-sm'
-                  : 'text-dark-400 hover:bg-dark-800 hover:text-white',
+                  ? 'text-[var(--text-primary)]'
+                  : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]',
               )
             }
           >
             {({ isActive }) => (
               <>
+                {/* 活跃背景 */}
+                {isActive && (
+                  <motion.div
+                    layoutId="nav-active"
+                    className="absolute inset-0 rounded-xl"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1))',
+                      border: '1px solid var(--border-active)',
+                    }}
+                    transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+                  />
+                )}
                 <Icon
                   className={clsx(
-                    'h-5 w-5 shrink-0 transition-colors',
-                    isActive ? 'text-primary-400' : 'text-dark-500 group-hover:text-dark-300',
+                    'relative h-5 w-5 shrink-0 transition-colors duration-200',
+                    isActive
+                      ? 'text-primary-400'
+                      : 'text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)]',
                   )}
                 />
                 {!sidebarCollapsed && (
@@ -100,9 +129,14 @@ export function Sidebar() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
+                    className="relative"
                   >
                     {label}
                   </motion.span>
+                )}
+                {/* 活跃指示点 */}
+                {isActive && (
+                  <div className="absolute right-2 h-1.5 w-1.5 rounded-full bg-primary-400 shadow-glow-sm" />
                 )}
               </>
             )}
@@ -110,6 +144,15 @@ export function Sidebar() {
         ))}
       </nav>
 
+      {/* 底部装饰线 */}
+      <div className="px-4 pb-4">
+        <div
+          className="h-px w-full"
+          style={{
+            background: 'linear-gradient(90deg, transparent, var(--border-color), transparent)',
+          }}
+        />
+      </div>
     </motion.aside>
   )
 }

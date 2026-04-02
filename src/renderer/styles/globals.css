@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ==========================================
-   老兵AI智剪 - 全局样式
+   老兵AI智剪 - 科技风双主题全局样式
    ========================================== */
 
 @layer base {
@@ -18,34 +18,58 @@
     --gradient-primary: linear-gradient(135deg, #6366F1, #8B5CF6);
     --gradient-primary-hover: linear-gradient(135deg, #4F46E5, #7C3AED);
     --gradient-accent: linear-gradient(135deg, #06B6D4, #8B5CF6);
-
-    /* 辉光 */
-    --glow-primary: 0 0 20px rgba(99, 102, 241, 0.4);
-    --glow-accent: 0 0 20px rgba(139, 92, 246, 0.4);
   }
 
-  /* 深色模式（默认） */
-  .dark {
-    --bg-primary: #0F172A;
-    --bg-secondary: #1E293B;
-    --bg-tertiary: #334155;
-    --text-primary: #F8FAFC;
-    --text-secondary: #94A3B8;
-    --border-color: rgba(255, 255, 255, 0.1);
-    --card-bg: rgba(30, 41, 59, 0.8);
-    --card-border: rgba(255, 255, 255, 0.1);
-  }
-
-  /* 浅色模式 */
-  .light {
-    --bg-primary: #F8FAFC;
+  /* ===== 浅色模式（默认） ===== */
+  :root {
+    --bg-primary: #F0F2F8;
     --bg-secondary: #FFFFFF;
-    --bg-tertiary: #E2E8F0;
-    --text-primary: #0F172A;
-    --text-secondary: #64748B;
-    --border-color: rgba(0, 0, 0, 0.1);
-    --card-bg: rgba(255, 255, 255, 0.8);
-    --card-border: rgba(0, 0, 0, 0.1);
+    --bg-tertiary: #E8EBF4;
+    --bg-elevated: rgba(255, 255, 255, 0.85);
+    --text-primary: #1A1D2E;
+    --text-secondary: #5B6078;
+    --text-tertiary: #8B90A8;
+    --border-color: rgba(99, 102, 241, 0.12);
+    --border-active: rgba(99, 102, 241, 0.35);
+    --card-bg: rgba(255, 255, 255, 0.7);
+    --card-border: rgba(99, 102, 241, 0.1);
+    --card-hover-border: rgba(99, 102, 241, 0.25);
+    --sidebar-bg: rgba(255, 255, 255, 0.75);
+    --header-bg: rgba(255, 255, 255, 0.6);
+    --input-bg: rgba(241, 243, 250, 0.8);
+    --scrollbar-thumb: rgba(99, 102, 241, 0.2);
+    --scrollbar-hover: rgba(99, 102, 241, 0.35);
+    --glow-primary: 0 0 20px rgba(99, 102, 241, 0.15);
+    --glow-accent: 0 0 20px rgba(139, 92, 246, 0.15);
+    --grid-color: rgba(99, 102, 241, 0.04);
+    --dot-color: rgba(99, 102, 241, 0.08);
+    --overlay-gradient: radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, 0.06) 0%, transparent 60%);
+  }
+
+  /* ===== 深色模式 ===== */
+  .dark {
+    --bg-primary: #080C18;
+    --bg-secondary: #0E1425;
+    --bg-tertiary: #162036;
+    --bg-elevated: rgba(14, 20, 37, 0.9);
+    --text-primary: #E8ECF8;
+    --text-secondary: #8892B0;
+    --text-tertiary: #5A6484;
+    --border-color: rgba(99, 102, 241, 0.15);
+    --border-active: rgba(99, 102, 241, 0.5);
+    --card-bg: rgba(14, 22, 42, 0.65);
+    --card-border: rgba(99, 102, 241, 0.12);
+    --card-hover-border: rgba(99, 102, 241, 0.3);
+    --sidebar-bg: rgba(10, 16, 30, 0.85);
+    --header-bg: rgba(8, 12, 24, 0.75);
+    --input-bg: rgba(10, 16, 32, 0.9);
+    --scrollbar-thumb: rgba(99, 102, 241, 0.25);
+    --scrollbar-hover: rgba(99, 102, 241, 0.45);
+    --glow-primary: 0 0 20px rgba(99, 102, 241, 0.3);
+    --glow-accent: 0 0 20px rgba(139, 92, 246, 0.3);
+    --grid-color: rgba(99, 102, 241, 0.07);
+    --dot-color: rgba(99, 102, 241, 0.12);
+    --overlay-gradient: radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, 0.1) 0%, transparent 60%);
   }
 
   html,
@@ -60,10 +84,10 @@
     color: var(--text-primary);
   }
 
-  /* 自定义滚动条 */
+  /* 自定义滚动条 - 浅色 */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
   }
 
   ::-webkit-scrollbar-track {
@@ -71,26 +95,42 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-dark-600/50;
+    background: var(--scrollbar-thumb);
+    border-radius: 10px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-dark-500/70;
+    background: var(--scrollbar-hover);
   }
 }
 
 @layer components {
-  /* 毛玻璃卡片 */
+  /* ===== 科技风毛玻璃卡片 ===== */
   .glass-card {
-    @apply rounded-xl border backdrop-blur-md;
+    @apply relative rounded-2xl border backdrop-blur-xl;
     background: var(--card-bg);
     border-color: var(--card-border);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* 辉光按钮 */
+  .glass-card:hover {
+    border-color: var(--card-hover-border);
+    box-shadow: var(--glow-primary);
+  }
+
+  /* 卡片顶部渐变光线 */
+  .glass-card::before {
+    content: '';
+    @apply absolute inset-x-0 top-0 h-px rounded-t-2xl;
+    background: linear-gradient(90deg, transparent, var(--color-primary), var(--color-accent), transparent);
+    opacity: 0.4;
+  }
+
+  /* ===== 辉光按钮 ===== */
   .btn-glow {
-    @apply relative overflow-hidden rounded-xl bg-gradient-to-r from-primary-500 to-accent-500
-      px-6 py-2.5 font-medium text-white transition-all duration-300;
+    @apply relative overflow-hidden rounded-xl;
+    background: var(--gradient-primary);
+    @apply px-6 py-2.5 font-medium text-white transition-all duration-300;
   }
 
   .btn-glow:hover {
@@ -102,15 +142,57 @@
     @apply scale-100;
   }
 
-  /* 输入框聚焦发光 */
+  /* 按钮内部闪光效果 */
+  .btn-glow::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.5s;
+  }
+
+  .btn-glow:hover::after {
+    transform: translateX(100%);
+  }
+
+  /* ===== 输入框聚焦发光 ===== */
   .input-glow {
-    @apply rounded-xl border bg-dark-800 px-4 py-2.5 text-white
-      placeholder-dark-400 outline-none transition-all duration-300;
+    @apply rounded-xl border px-4 py-2.5 outline-none transition-all duration-300;
+    background: var(--input-bg);
     border-color: var(--border-color);
+    color: var(--text-primary);
+  }
+
+  .input-glow::placeholder {
+    color: var(--text-tertiary);
   }
 
   .input-glow:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15), var(--glow-primary);
+  }
+
+  /* ===== 科技风渐变边框容器 ===== */
+  .tech-border {
+    @apply relative rounded-2xl p-px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.1), rgba(6, 182, 212, 0.3));
+  }
+
+  .tech-border-inner {
+    @apply rounded-2xl;
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+  }
+
+  /* ===== 脉冲指示点 ===== */
+  .pulse-dot {
+    @apply relative;
+  }
+
+  .pulse-dot::after {
+    content: '';
+    @apply absolute right-0 top-0 h-2 w-2 rounded-full;
+    background: var(--color-primary);
+    animation: pulse-glow 2s ease-in-out infinite;
   }
 }
