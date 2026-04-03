@@ -17,21 +17,7 @@ import { Button } from '../components/ui/Button'
 import { Select } from '../components/ui/Select'
 import { useSettingsStore } from '../stores/settingsStore'
 import type { GLMModel, AnalysisMode } from '@shared/types'
-
-/** GLM 模型选项 */
-const MODEL_OPTIONS = [
-  { value: 'GLM-4.6V-FlashX', label: 'GLM-4.6V-FlashX（最快）' },
-  { value: 'GLM-5V-Turbo', label: 'GLM-5V-Turbo（推荐）' },
-  { value: 'GLM-4.6V', label: 'GLM-4.6V（精准）' },
-  { value: 'GLM-4.7-FlashX', label: 'GLM-4.7-FlashX（均衡）' },
-]
-
-/** 分析模式选项 */
-const ANALYSIS_MODE_OPTIONS = [
-  { value: 'quick', label: '快速' },
-  { value: 'standard', label: '标准' },
-  { value: 'deep', label: '深度' },
-]
+import { MODEL_OPTIONS, ANALYSIS_MODE_OPTIONS } from '@shared/constants'
 
 /** Prompt 模板 */
 const PROMPT_TEMPLATES = [

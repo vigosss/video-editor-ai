@@ -27,6 +27,7 @@ import { Card } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { useProjectStore } from '../stores/projectStore'
 import type { Project, ProjectStatus, ProcessingStep, Clip } from '@shared/types'
+import { MODEL_LABEL_MAP, ANALYSIS_MODE_LABEL_MAP } from '@shared/constants'
 
 /** 处理步骤列表 */
 const PROCESSING_STEPS: { key: ProcessingStep; label: string }[] = [
@@ -187,7 +188,9 @@ export default function ProjectDetail() {
               <Cpu className="mr-1 inline h-3 w-3" />
               AI 模型
             </span>
-            <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>{project.model}</p>
+            <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>
+              {MODEL_LABEL_MAP[project.model] ?? project.model}
+            </p>
           </div>
           <div>
             <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
@@ -202,7 +205,7 @@ export default function ProjectDetail() {
               分析模式
             </span>
             <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>
-              {project.analysisMode === 'quick' ? '快速' : project.analysisMode === 'standard' ? '标准' : '深度'}
+              {ANALYSIS_MODE_LABEL_MAP[project.analysisMode] ?? project.analysisMode}
             </p>
           </div>
           {project.prompt && (

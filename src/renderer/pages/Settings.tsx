@@ -23,19 +23,7 @@ import { Card } from '../components/ui/Card'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useAppStore } from '../stores/appStore'
 import type { GLMModel, AnalysisMode, WhisperModelSize, OutputFormat, Resolution, ThemeMode } from '@shared/types'
-
-const MODEL_OPTIONS = [
-  { value: 'GLM-4.6V-FlashX', label: 'GLM-4.6V-FlashX（最快）' },
-  { value: 'GLM-5V-Turbo', label: 'GLM-5V-Turbo（推荐）' },
-  { value: 'GLM-4.6V', label: 'GLM-4.6V（精准）' },
-  { value: 'GLM-4.7-FlashX', label: 'GLM-4.7-FlashX（均衡）' },
-]
-
-const ANALYSIS_MODE_OPTIONS = [
-  { value: 'quick', label: '快速' },
-  { value: 'standard', label: '标准' },
-  { value: 'deep', label: '深度' },
-]
+import { MODEL_OPTIONS, ANALYSIS_MODE_OPTIONS } from '@shared/constants'
 
 const WHISPER_MODEL_OPTIONS = [
   { value: 'tiny', label: 'Tiny（最快，精度较低）' },
@@ -123,14 +111,14 @@ export default function Settings() {
         设置
       </h2>
 
-      {/* GLM API Key */}
-      <Card title="GLM API Key" description="用于调用智谱 GLM 视觉模型 API">
+      {/* 老兵AI API Key */}
+      <Card title="老兵AI API Key" description="用于调用老兵AI 视觉模型 API">
         <div className="flex gap-3">
           <Input
             type={showApiKey ? 'text' : 'password'}
             value={localSettings.glmApiKey}
             onChange={(e) => updateLocal('glmApiKey', e.target.value)}
-            placeholder="输入你的 GLM API Key"
+            placeholder="输入你的 老兵AI API Key"
             suffix={
               <Button
                 variant="ghost"

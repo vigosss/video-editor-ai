@@ -5,7 +5,6 @@ import {
   Home,
   FolderOpen,
   Settings,
-  Info,
   Scissors,
   ChevronLeft,
   ChevronRight,
