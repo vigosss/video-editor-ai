@@ -112,13 +112,15 @@ export default function Home() {
         analysisMode,
       })
 
-      toast.success('项目创建成功！')
+      toast.success('项目创建成功，正在启动处理...')
 
-      // 尝试启动处理（阶段七实现，目前会抛错，跳转到详情页即可）
+      // 启动处理流程
       try {
         await window.electronAPI.startProcess(project.id)
-      } catch {
-        // 处理流程尚未实现，忽略
+      } catch (err) {
+        // 处理启动失败（如 API Key 未配置等），仍然跳转到详情页
+        const msg = err instanceof Error ? err.message : '启动处理失败'
+        toast.warning(`处理启动失败: ${msg}，可在项目详情页重试`)
       }
 
       navigate(`/projects/${project.id}`)

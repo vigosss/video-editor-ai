@@ -2,7 +2,7 @@
 // 视频处理 IPC 处理器
 // ==========================================
 
-import { ipcMain } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc'
 import {
   getVideoInfo as ffmpegGetVideoInfo,
@@ -14,6 +14,8 @@ import {
   checkFfmpegAvailable,
 } from '../services/ffmpeg'
 import type { ClipParams } from '../services/ffmpeg'
+import { addToQueue, cancelProject, setMainWindow } from '../services/queue'
+import { getProject } from '../services/database'
 
 export function registerVideoIPC(): void {
   // ==========================================
@@ -81,15 +83,33 @@ export function registerVideoIPC(): void {
   )
 
   // ==========================================
-  // 开始处理流程（占位，将在阶段七完成完整实现）
+  // 开始处理流程
   // ==========================================
-  ipcMain.handle(IPC_CHANNELS.VIDEO_START_PROCESS, async (_event, _projectId: string) => {
-    throw new Error('视频处理功能尚未实现，将在阶段七完成')
+  ipcMain.handle(IPC_CHANNELS.VIDEO_START_PROCESS, async (event, projectId: string) => {
+    // 验证项目存在
+    const project = getProject(projectId)
+    if (!project) {
+      throw new Error(`项目不存在: ${projectId}`)
+    }
+
+    // 设置 BrowserWindow 引用（用于进度推送）
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win) {
+      setMainWindow(win)
+    }
+
+    // 添加到处理队列
+    addToQueue(projectId)
   })
 
-  // 取消处理流程（占位）
-  ipcMain.handle(IPC_CHANNELS.VIDEO_CANCEL_PROCESS, async (_event, _projectId: string) => {
-    throw new Error('取消处理功能尚未实现，将在阶段七完成')
+  // ==========================================
+  // 取消处理流程
+  // ==========================================
+  ipcMain.handle(IPC_CHANNELS.VIDEO_CANCEL_PROCESS, async (_event, projectId: string) => {
+    const cancelled = cancelProject(projectId)
+    if (!cancelled) {
+      throw new Error(`未找到正在处理的项目: ${projectId}`)
+    }
   })
 
   console.log('[ipc] 视频 IPC 处理器已注册')

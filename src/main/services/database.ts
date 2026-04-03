@@ -246,6 +246,12 @@ export function createClips(projectId: string, clips: Array<{ startTime: number;
   return transaction()
 }
 
+/** 删除项目的所有剪辑片段 */
+export function deleteClipsByProject(projectId: string): void {
+  const database = getDatabase()
+  database.prepare('DELETE FROM clips WHERE project_id = ?').run(projectId)
+}
+
 /** 获取项目的所有剪辑片段 */
 export function getClipsByProject(projectId: string): Clip[] {
   const database = getDatabase()

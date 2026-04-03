@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { toast } from 'react-toastify'
@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Film,
   Trash2,
+  StopCircle,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -27,6 +28,7 @@ import { Card } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { useProjectStore } from '../stores/projectStore'
 import type { Project, ProjectStatus, ProcessingStep, Clip } from '@shared/types'
+import type { PipelineProgress } from '@shared/pipeline'
 import { MODEL_LABEL_MAP, ANALYSIS_MODE_LABEL_MAP } from '@shared/constants'
 
 /** 处理步骤列表 */
@@ -76,14 +78,67 @@ export default function ProjectDetail() {
   const [clips, setClips] = useState<Clip[]>([])
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+
+  // 实时进度状态（本地缓存，不通过 store 刷新）
+  const [liveProgress, setLiveProgress] = useState<PipelineProgress | null>(null)
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  /** 加载剪辑片段 */
+  const loadClips = useCallback((projectId: string) => {
+    window.electronAPI.getProjectClips(projectId).then(setClips).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (id) {
       fetchProject(id)
-      // 获取剪辑片段
-      window.electronAPI.getProjectClips(id).then(setClips).catch(() => {})
+      loadClips(id)
     }
-  }, [id, fetchProject])
+  }, [id, fetchProject, loadClips])
+
+  /** 监听处理进度 */
+  useEffect(() => {
+    if (!id) return
+
+    const cleanup = window.electronAPI.onProgress((progress: PipelineProgress) => {
+      setLiveProgress(progress)
+
+      // 完成或失败时刷新项目状态和片段列表
+      if (progress.step === 'completed') {
+        toast.success('视频处理完成！')
+        fetchProject(id)
+        loadClips(id)
+      } else if (progress.step === 'failed') {
+        toast.error(progress.message || '处理失败')
+        fetchProject(id)
+      }
+    })
+
+    return cleanup
+  }, [id, fetchProject, loadClips])
+
+  /** 处理中的定时轮询（保底机制，每5秒刷新一次） */
+  useEffect(() => {
+    if (!id) return
+    if (currentProject?.status !== 'processing') {
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current)
+        progressTimerRef.current = null
+      }
+      return
+    }
+
+    progressTimerRef.current = setInterval(() => {
+      fetchProject(id)
+    }, 5000)
+
+    return () => {
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current)
+        progressTimerRef.current = null
+      }
+    }
+  }, [id, currentProject?.status, fetchProject])
 
   /** 删除项目 */
   const handleDelete = async () => {
@@ -106,9 +161,24 @@ export default function ProjectDetail() {
     try {
       await window.electronAPI.startProcess(id)
       toast.success('已重新开始处理')
+      setLiveProgress(null)
       fetchProject(id)
-    } catch {
-      toast.error('启动处理失败，该功能将在后续阶段实现')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '启动处理失败')
+    }
+  }
+
+  /** 取消处理 */
+  const handleCancel = async () => {
+    if (!id) return
+    setCancelling(true)
+    try {
+      await window.electronAPI.cancelProcess(id)
+      toast.info('已发送取消请求')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '取消失败')
+    } finally {
+      setCancelling(false)
     }
   }
 
@@ -163,6 +233,12 @@ export default function ProjectDetail() {
             <Button variant="secondary" size="sm" onClick={handleRetry}>
               <RefreshCw className="h-4 w-4" />
               重试
+            </Button>
+          )}
+          {project.status === 'processing' && (
+            <Button variant="secondary" size="sm" onClick={handleCancel} loading={cancelling}>
+              <StopCircle className="h-4 w-4" />
+              取消处理
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={() => setShowDeleteModal(true)}>
@@ -226,10 +302,10 @@ export default function ProjectDetail() {
       <Card title="处理进度">
         {/* 总进度条 */}
         <Progress
-          value={project.progress}
+          value={liveProgress?.overallProgress ?? project.progress}
           size="lg"
           showPercent
-          label={`总体进度 · ${project.status === 'completed' ? '已完成' : project.status === 'failed' ? '失败' : '处理中'}`}
+          label={`总体进度 · ${project.status === 'completed' ? '已完成' : project.status === 'failed' ? '失败' : liveProgress?.message ?? '处理中'}`}
           className="mb-6"
         />
 
@@ -249,6 +325,12 @@ export default function ProjectDetail() {
               >
                 {step.label}
               </span>
+              {/* 当前步骤的实时进度消息 */}
+              {liveProgress && liveProgress.step === step.key && project.status === 'processing' && (
+                <span className="ml-auto text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  {liveProgress.message}
+                </span>
+              )}
             </div>
           ))}
         </div>
