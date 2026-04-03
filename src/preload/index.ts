@@ -33,7 +33,13 @@ const api: ElectronAPI = {
   setSettings: (settings) => ipcRenderer.invoke('settings:set', settings),
 
   // 上传
-  startUpload: (projectId, platform) => ipcRenderer.invoke('upload:start', projectId, platform),
+  startUpload: (params) => ipcRenderer.invoke('upload:start', params),
+  cancelUpload: (projectId, platform) => ipcRenderer.invoke('upload:cancel', projectId, platform),
+  retryUpload: (uploadId) => ipcRenderer.invoke('upload:retry', uploadId),
+  getUploadRecords: (projectId) => ipcRenderer.invoke('upload:getRecords', projectId),
+  checkPlatformAuth: (platform) => ipcRenderer.invoke('upload:checkAuth', platform),
+  authorizePlatform: (platform) => ipcRenderer.invoke('upload:authorize', platform),
+  revokePlatformAuth: (platform) => ipcRenderer.invoke('upload:revoke', platform),
   onUploadProgress: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, data: unknown) => {
       callback(data as Parameters<typeof callback>[0])

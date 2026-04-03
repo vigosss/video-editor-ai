@@ -10,12 +10,8 @@
     "build:dev": "vite build",
     "preview": "vite preview",
     "prepare:ffmpeg": "node scripts/prepare-ffmpeg.js",
-    "package": "yarn run build && yarn run prepare:ffmpeg && electron-builder --dir",
-    "package:mac": "yarn run build && yarn run prepare:ffmpeg && electron-builder --dir --mac",
-    "package:win": "yarn run build && yarn run prepare:ffmpeg && electron-builder --dir --win",
-    "dist": "yarn run build && yarn run prepare:ffmpeg && electron-builder",
-    "dist:mac": "yarn run build && yarn run prepare:ffmpeg && electron-builder --mac",
-    "dist:win": "yarn run build && yarn run prepare:ffmpeg && electron-builder --win",
+    "package": "yarn run build && yarn run prepare:ffmpeg && electron-builder --dir --win",
+    "dist": "yarn run build && yarn run prepare:ffmpeg && electron-builder --win",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
   },
@@ -26,6 +22,8 @@
     "@uiw/react-textarea-code-editor": "^3.1.1",
     "better-sqlite3": "^11.6.0",
     "clsx": "^2.1.1",
+    "dotenv": "^17.4.0",
+    "electron-updater": "^6.3.9",
     "ffprobe-static": "^3.1.0",
     "fluent-ffmpeg": "^2.1.3",
     "follow-redirects": "^1.15.11",
@@ -35,7 +33,6 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
     "react-toastify": "^10.0.6",
-    "electron-updater": "^6.3.9",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

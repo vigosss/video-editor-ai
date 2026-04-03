@@ -1,5 +1,9 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+// 加载 .env.local 环境变量（平台凭证等）
+import { config as dotenvConfig } from 'dotenv'
 import { join } from 'path'
+dotenvConfig({ path: join(__dirname, '../../.env.local') })
+
+import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initDatabase, closeDatabase } from './services/database'
 import { initUpdater } from './services/updater'

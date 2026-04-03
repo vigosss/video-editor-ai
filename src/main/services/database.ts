@@ -6,6 +6,7 @@ import { DEFAULT_SYSTEM_PROMPT } from '../../shared/constants'
 import type { Project, CreateProjectParams, ProjectStatus, ProcessingStep } from '../../shared/project'
 import type { Clip } from '../../shared/clip'
 import type { UploadRecord, UploadPlatform, UploadStatus } from '../../shared/upload'
+import type { OAuthToken, PlatformAuthStatus } from '../../shared/platform'
 import type { AppSettings } from '../../shared/settings'
 import type { PromptTemplate } from '../../shared/prompt'
 
@@ -83,13 +84,18 @@ function runMigrations(database: Database.Database): void {
 
     -- 上传记录表
     CREATE TABLE IF NOT EXISTS uploads (
-      id          TEXT PRIMARY KEY,
-      project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      platform    TEXT NOT NULL,
-      video_id    TEXT NOT NULL DEFAULT '',
-      video_url   TEXT NOT NULL DEFAULT '',
-      status      TEXT NOT NULL DEFAULT 'pending',
-      uploaded_at TEXT
+      id            TEXT PRIMARY KEY,
+      project_id    TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      platform      TEXT NOT NULL,
+      title         TEXT NOT NULL DEFAULT '',
+      description   TEXT NOT NULL DEFAULT '',
+      tags          TEXT NOT NULL DEFAULT '',
+      cover_path    TEXT NOT NULL DEFAULT '',
+      video_id      TEXT NOT NULL DEFAULT '',
+      video_url     TEXT NOT NULL DEFAULT '',
+      status        TEXT NOT NULL DEFAULT 'pending',
+      error_message TEXT NOT NULL DEFAULT '',
+      uploaded_at   TEXT
     );
 
     -- 设置表（键值对）
@@ -269,18 +275,33 @@ export function getClipsByProject(projectId: string): Clip[] {
 // 上传记录
 // ==========================================
 
-/** 创建上传记录 */
-export function createUploadRecord(projectId: string, platform: UploadPlatform): UploadRecord {
+/** 创建上传记录（含发布参数） */
+export function createUploadRecord(
+  projectId: string,
+  platform: UploadPlatform,
+  title: string = '',
+  description: string = '',
+  tags: string = '',
+  coverPath: string = '',
+): UploadRecord {
   const database = getDatabase()
   const id = randomUUID()
-  database.prepare('INSERT INTO uploads (id, project_id, platform, status) VALUES (?, ?, ?, ?)').run(id, projectId, platform, 'pending')
+  database.prepare(`
+    INSERT INTO uploads (id, project_id, platform, title, description, tags, cover_path, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+  `).run(id, projectId, platform, title, description, tags, coverPath)
   return {
     id,
     projectId,
     platform,
+    title,
+    description,
+    tags,
+    coverPath,
     videoId: '',
     videoUrl: '',
     status: 'pending' as UploadStatus,
+    errorMessage: '',
     uploadedAt: '',
   }
 }
@@ -291,9 +312,14 @@ export function updateUploadRecord(id: string, data: Partial<UploadRecord>): voi
   const fields: string[] = []
   const values: unknown[] = []
 
+  if (data.title !== undefined) { fields.push('title = ?'); values.push(data.title) }
+  if (data.description !== undefined) { fields.push('description = ?'); values.push(data.description) }
+  if (data.tags !== undefined) { fields.push('tags = ?'); values.push(data.tags) }
+  if (data.coverPath !== undefined) { fields.push('cover_path = ?'); values.push(data.coverPath) }
   if (data.videoId !== undefined) { fields.push('video_id = ?'); values.push(data.videoId) }
   if (data.videoUrl !== undefined) { fields.push('video_url = ?'); values.push(data.videoUrl) }
   if (data.status !== undefined) { fields.push('status = ?'); values.push(data.status) }
+  if (data.errorMessage !== undefined) { fields.push('error_message = ?'); values.push(data.errorMessage) }
   if (data.uploadedAt !== undefined) { fields.push('uploaded_at = ?'); values.push(data.uploadedAt) }
 
   if (fields.length === 0) return
@@ -306,15 +332,62 @@ export function updateUploadRecord(id: string, data: Partial<UploadRecord>): voi
 export function getUploadsByProject(projectId: string): UploadRecord[] {
   const database = getDatabase()
   const rows = database.prepare('SELECT * FROM uploads WHERE project_id = ? ORDER BY uploaded_at DESC').all(projectId) as RawUploadRow[]
-  return rows.map((r) => ({
-    id: r.id,
-    projectId: r.project_id,
-    platform: r.platform as UploadPlatform,
-    videoId: r.video_id,
-    videoUrl: r.video_url,
-    status: r.status as UploadStatus,
-    uploadedAt: r.uploaded_at ?? '',
-  }))
+  return rows.map(rowToUploadRecord)
+}
+
+/** 获取单个上传记录 */
+export function getUploadRecord(id: string): UploadRecord | null {
+  const database = getDatabase()
+  const row = database.prepare('SELECT * FROM uploads WHERE id = ?').get(id) as RawUploadRow | undefined
+  return row ? rowToUploadRecord(row) : null
+}
+
+// ==========================================
+// 平台 OAuth Token 存储
+// ==========================================
+
+/** 保存平台 OAuth Token（加密） */
+export function savePlatformToken(platform: UploadPlatform, token: OAuthToken): void {
+  const database = getDatabase()
+  const encrypted = encrypt(JSON.stringify(token))
+  database.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(`${platform}_oauth_token`, encrypted)
+}
+
+/** 获取平台 OAuth Token（解密） */
+export function getPlatformToken(platform: UploadPlatform): OAuthToken | null {
+  const database = getDatabase()
+  const row = database.prepare('SELECT value FROM settings WHERE key = ?').get(`${platform}_oauth_token`) as { value: string } | undefined
+  if (!row) return null
+  try {
+    return JSON.parse(decrypt(row.value)) as OAuthToken
+  } catch {
+    return null
+  }
+}
+
+/** 删除平台 OAuth Token */
+export function deletePlatformToken(platform: UploadPlatform): void {
+  const database = getDatabase()
+  database.prepare('DELETE FROM settings WHERE key = ?').run(`${platform}_oauth_token`)
+}
+
+/** 获取平台授权状态 */
+export function getPlatformAuthStatus(platform: UploadPlatform): PlatformAuthStatus {
+  const token = getPlatformToken(platform)
+  if (!token) {
+    return { platform, authorized: false }
+  }
+
+  // 检查 token 是否过期
+  const obtainedAt = new Date(token.obtainedAt).getTime()
+  const expiresAt = obtainedAt + token.expiresIn * 1000
+  const isExpired = Date.now() > expiresAt
+
+  return {
+    platform,
+    authorized: !isExpired,
+    expiresAt: new Date(expiresAt).toISOString(),
+  }
 }
 
 // ==========================================
@@ -441,9 +514,14 @@ interface RawUploadRow {
   id: string
   project_id: string
   platform: string
+  title: string
+  description: string
+  tags: string
+  cover_path: string
   video_id: string
   video_url: string
   status: string
+  error_message: string
   uploaded_at: string | null
 }
 
@@ -462,5 +540,22 @@ function rowToProject(row: RawProjectRow): Project {
     errorMessage: row.error_message,
     createdAt: row.created_at,
     completedAt: row.completed_at,
+  }
+}
+
+function rowToUploadRecord(row: RawUploadRow): UploadRecord {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    platform: row.platform as UploadPlatform,
+    title: row.title,
+    description: row.description,
+    tags: row.tags,
+    coverPath: row.cover_path,
+    videoId: row.video_id,
+    videoUrl: row.video_url,
+    status: row.status as UploadStatus,
+    errorMessage: row.error_message,
+    uploadedAt: row.uploaded_at ?? '',
   }
 }

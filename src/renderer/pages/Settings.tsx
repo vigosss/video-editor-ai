@@ -15,6 +15,11 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
+  Link2,
+  Unlink,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -23,8 +28,9 @@ import { Card } from '../components/ui/Card'
 import CodeEditor from '@uiw/react-textarea-code-editor'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useAppStore } from '../stores/appStore'
-import type { GLMModel, AnalysisMode, WhisperModelSize, OutputFormat, Resolution } from '@shared/types'
+import type { GLMModel, AnalysisMode, WhisperModelSize, OutputFormat, Resolution, UploadPlatform, PlatformAuthStatus } from '@shared/types'
 import { MODEL_OPTIONS, ANALYSIS_MODE_OPTIONS, DEFAULT_SYSTEM_PROMPT } from '@shared/constants'
+import { PLATFORM_CONFIGS } from '@shared/platform'
 
 const WHISPER_MODEL_OPTIONS = [
   { value: 'tiny', label: 'Tiny（最快，精度较低）' },
@@ -53,9 +59,35 @@ export default function Settings() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [localSettings, setLocalSettings] = useState(settings)
 
+  // 平台授权状态
+  const [authStatuses, setAuthStatuses] = useState<Record<UploadPlatform, PlatformAuthStatus>>({
+    kuaishou: { platform: 'kuaishou', authorized: false },
+    douyin: { platform: 'douyin', authorized: false },
+  })
+  const [authorizing, setAuthorizing] = useState<Record<UploadPlatform, boolean>>({
+    kuaishou: false,
+    douyin: false,
+  })
+
   useEffect(() => {
     fetchSettings()
   }, [fetchSettings])
+
+  // 加载平台授权状态
+  useEffect(() => {
+    const loadAuthStatuses = async () => {
+      try {
+        const [ks, dy] = await Promise.all([
+          window.electronAPI.checkPlatformAuth('kuaishou'),
+          window.electronAPI.checkPlatformAuth('douyin'),
+        ])
+        setAuthStatuses({ kuaishou: ks, douyin: dy })
+      } catch {
+        // 静默处理
+      }
+    }
+    loadAuthStatuses()
+  }, [])
 
   // 同步远程设置到本地
   useEffect(() => {
@@ -93,6 +125,34 @@ export default function Settings() {
       }
     } catch {
       toast.error('选择目录失败')
+    }
+  }
+
+  /** 发起平台授权 */
+  const handleAuthorize = async (platform: UploadPlatform) => {
+    setAuthorizing((prev) => ({ ...prev, [platform]: true }))
+    try {
+      const status = await window.electronAPI.authorizePlatform(platform)
+      setAuthStatuses((prev) => ({ ...prev, [platform]: status }))
+      toast.success(`${PLATFORM_CONFIGS[platform].name} 授权成功！`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '授权失败')
+    } finally {
+      setAuthorizing((prev) => ({ ...prev, [platform]: false }))
+    }
+  }
+
+  /** 取消平台授权 */
+  const handleRevoke = async (platform: UploadPlatform) => {
+    try {
+      await window.electronAPI.revokePlatformAuth(platform)
+      setAuthStatuses((prev) => ({
+        ...prev,
+        [platform]: { platform, authorized: false },
+      }))
+      toast.success(`${PLATFORM_CONFIGS[platform].name} 已取消授权`)
+    } catch {
+      toast.error('取消授权失败')
     }
   }
 
@@ -189,6 +249,89 @@ export default function Settings() {
           <Button variant="secondary" onClick={handleSelectDirectory}>
             <FolderOpen className="h-4 w-4" />
           </Button>
+        </div>
+      </Card>
+
+      {/* 平台账号管理 */}
+      <Card title="平台账号管理" description="授权后可一键发布视频到短视频平台">
+        <div className="space-y-4">
+          {(['kuaishou', 'douyin'] as UploadPlatform[]).map((platform) => {
+            const config = PLATFORM_CONFIGS[platform]
+            const status = authStatuses[platform]
+            const isAuthorizing = authorizing[platform]
+
+            return (
+              <div
+                key={platform}
+                className="flex items-center gap-4 rounded-xl border p-4"
+                style={{
+                  borderColor: status.authorized ? 'var(--border-active)' : 'var(--border-color)',
+                  background: status.authorized
+                    ? `linear-gradient(135deg, ${config.color}08, ${config.color}05)`
+                    : 'transparent',
+                }}
+              >
+                {/* 平台图标 */}
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
+                  style={{ background: config.color }}
+                >
+                  {config.name[0]}
+                </div>
+
+                {/* 平台信息 */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                      {config.name}
+                    </span>
+                    {status.authorized ? (
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                        style={{ background: `${config.color}15`, color: config.color }}
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        已授权
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-500/10 px-2 py-0.5 text-xs font-medium text-gray-400">
+                        <AlertCircle className="h-3 w-3" />
+                        未授权
+                      </span>
+                    )}
+                  </div>
+                  {status.authorized && status.expiresAt && (
+                    <p className="mt-0.5 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                      授权到期：{new Date(status.expiresAt).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+
+                {/* 操作按钮 */}
+                {status.authorized ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRevoke(platform)}
+                    className="shrink-0"
+                  >
+                    <Unlink className="h-4 w-4" />
+                    取消授权
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleAuthorize(platform)}
+                    loading={isAuthorizing}
+                    className="shrink-0"
+                  >
+                    <Link2 className="h-4 w-4" />
+                    前往授权
+                  </Button>
+                )}
+              </div>
+            )
+          })}
         </div>
       </Card>
 

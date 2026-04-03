@@ -7,7 +7,8 @@ import type { Clip } from './clip'
 import type { VideoInfo } from './video'
 import type { PipelineProgress } from './pipeline'
 import type { AppSettings, WhisperModelSize } from './settings'
-import type { UploadRecord, UploadPlatform } from './upload'
+import type { UploadRecord, UploadPlatform, PublishParams, UploadProgress } from './upload'
+import type { PlatformAuthStatus } from './platform'
 import type { PromptTemplate } from './prompt'
 import type { GLMModel, AnalysisMode } from './project'
 
@@ -65,8 +66,14 @@ export interface ElectronAPI {
   setSettings: (settings: Partial<AppSettings>) => Promise<void>
 
   // 上传
-  startUpload: (projectId: string, platform: UploadPlatform) => Promise<UploadRecord>
-  onUploadProgress: (callback: (progress: { platform: UploadPlatform; progress: number }) => void) => () => void
+  startUpload: (params: PublishParams) => Promise<UploadRecord>
+  cancelUpload: (projectId: string, platform: UploadPlatform) => Promise<void>
+  retryUpload: (uploadId: string) => Promise<UploadRecord>
+  getUploadRecords: (projectId: string) => Promise<UploadRecord[]>
+  checkPlatformAuth: (platform: UploadPlatform) => Promise<PlatformAuthStatus>
+  authorizePlatform: (platform: UploadPlatform) => Promise<PlatformAuthStatus>
+  revokePlatformAuth: (platform: UploadPlatform) => Promise<void>
+  onUploadProgress: (callback: (progress: UploadProgress) => void) => () => void
 
   // Whisper 语音识别
   whisperTranscribe: (audioPath: string, modelSize: WhisperModelSize, outputDir?: string) => Promise<{

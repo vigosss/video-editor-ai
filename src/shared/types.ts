@@ -16,7 +16,11 @@ export type {
 export type { Clip } from './clip'
 
 // 上传相关
-export type { UploadPlatform, UploadStatus, UploadRecord } from './upload'
+export type { UploadPlatform, UploadStatus, UploadRecord, PublishParams, UploadProgress } from './upload'
+
+// 平台配置
+export type { PlatformConfig, PlatformAuthStatus, OAuthToken, PlatformCredentials } from './platform'
+export { PLATFORM_CONFIGS, KUAISHOU_CONFIG, DOUYIN_CONFIG } from './platform'
 
 // 设置相关
 export type {

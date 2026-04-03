@@ -31,6 +31,12 @@ export const IPC_CHANNELS = {
   // 上传
   UPLOAD_START: 'upload:start',
   UPLOAD_PROGRESS: 'upload:progress',
+  UPLOAD_CANCEL: 'upload:cancel',
+  UPLOAD_GET_RECORDS: 'upload:getRecords',
+  UPLOAD_CHECK_AUTH: 'upload:checkAuth',
+  UPLOAD_AUTHORIZE: 'upload:authorize',
+  UPLOAD_REVOKE: 'upload:revoke',
+  UPLOAD_RETRY: 'upload:retry',
 
   // Prompt 模板
   TEMPLATE_LIST: 'template:list',
