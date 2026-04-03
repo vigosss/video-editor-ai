@@ -193,7 +193,7 @@ export default function Settings() {
       </Card>
 
       {/* 高级设置：系统提示词 */}
-      <Card title="高级设置" description="自定义 AI 分析行为（高级用户）">
+      <Card title="高级设置" description="自定义 老兵AI 分析行为">
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
