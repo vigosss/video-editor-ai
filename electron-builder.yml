@@ -33,7 +33,7 @@ npmRebuild: true
 # Windows 配置
 # ==========================================
 win:
-  icon: build/logo.png
+  icon: build/favicon.ico
   target:
     - target: nsis
       arch:
@@ -43,8 +43,8 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  installerIcon: build/logo.png
-  uninstallerIcon: build/logo.png
+  installerIcon: build/favicon.ico
+  uninstallerIcon: build/favicon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: 老兵AI智剪
