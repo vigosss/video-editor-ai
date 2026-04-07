@@ -1,14 +1,13 @@
 // ==========================================
-// Whisper 语音识别服务
+// Whisper 语音识别服务（使用 whisper.cpp CLI）
 // ==========================================
 
-import { Whisper, WhisperFullParams, WhisperSamplingStrategy, decodeAudioAsync } from '@napi-rs/whisper'
-import { getWhisperModelsDir } from '../utils/paths'
-import { existsSync, unlinkSync, createWriteStream, writeFileSync, statSync, renameSync } from 'fs'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
+import { getWhisperModelsDir, getWhisperCliPath } from '../utils/paths'
+import { existsSync, unlinkSync, createWriteStream, writeFileSync, statSync, renameSync, readFileSync } from 'fs'
+import { join, dirname, basename } from 'path'
 import { https, http } from 'follow-redirects'
 import { URL } from 'url'
+import { spawn } from 'child_process'
 import type { WhisperModelSize } from '../../shared/settings'
 
 // ==========================================
@@ -52,24 +51,14 @@ const MODEL_FILENAMES: Record<WhisperModelSize, string> = {
   small: 'ggml-small.bin',
 }
 
-/** 模型文件大小（字节，用于校验） */
-const MODEL_EXPECTED_SIZES: Record<WhisperModelSize, number> = {
-  tiny: 75 * 1024 * 1024,      // ~75MB
-  base: 142 * 1024 * 1024,     // ~142MB
-  small: 466 * 1024 * 1024,    // ~466MB
-}
-
 /**
  * 多源下载配置（按优先级排列）
  * 支持国内镜像自动降级
  */
 const MODEL_SOURCES: Record<WhisperModelSize, string[]> = {
   tiny: [
-    // 主源：HF Mirror（国内可直连的镜像，无需代理）
     'https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
-    // 备用源1：ModelScope（阿里巴巴，国内稳定）
     'https://modelscope.cn/api/v1/models/pkufool/whisper.cpp/repo?Revision=master&FilePath=ggml-tiny.bin',
-    // 备用源2：官方 HF（有代理时可用）
     'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin',
   ],
   base: [
@@ -95,10 +84,9 @@ export function getModelPath(size: WhisperModelSize): string {
 export function isModelDownloaded(size: WhisperModelSize): boolean {
   const modelPath = getModelPath(size)
   if (!existsSync(modelPath)) return false
-  // 简单校验文件大小 > 1MB（避免空文件或下载中断的文件）
   try {
     const stats = statSync(modelPath)
-    return stats.size > 1024 * 1024 // 至少 1MB
+    return stats.size > 1024 * 1024
   } catch {
     return false
   }
@@ -130,9 +118,6 @@ export function getAvailableModels(): ModelInfo[] {
 // 模型下载（多源自动降级）
 // ==========================================
 
-/**
- * 带进度追踪的文件下载
- */
 function downloadWithProgress(
   url: string,
   destPath: string,
@@ -141,23 +126,17 @@ function downloadWithProgress(
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url)
     const httpModule = parsedUrl.protocol === 'https:' ? https : http
-
-    // 临时文件路径
     const tempPath = destPath + '.downloading'
 
-    // 清理可能存在的临时文件
     try {
       if (existsSync(tempPath)) unlinkSync(tempPath)
-    } catch {
-      // 忽略
-    }
+    } catch { /* 忽略 */ }
 
     const file = createWriteStream(tempPath)
     let downloadedBytes = 0
     let totalBytes = 0
 
     const request = httpModule.get(url, (response) => {
-      // 处理重定向
       if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         file.close()
         try { unlinkSync(tempPath) } catch { /* 忽略 */ }
@@ -188,9 +167,7 @@ function downloadWithProgress(
 
       file.on('finish', () => {
         file.close(() => {
-          // 下载完成，重命名临时文件为正式文件
           try {
-            // 如果正式文件已存在，先删除
             if (existsSync(destPath)) unlinkSync(destPath)
             renameSync(tempPath, destPath)
             resolve()
@@ -207,7 +184,6 @@ function downloadWithProgress(
       reject(new Error(`网络请求失败: ${err.message}`))
     })
 
-    // 设置超时（5分钟）
     request.setTimeout(5 * 60 * 1000, () => {
       request.destroy()
       file.close()
@@ -217,15 +193,11 @@ function downloadWithProgress(
   })
 }
 
-/**
- * 下载模型（多源自动降级）
- * 按优先级依次尝试，直到有一个成功
- */
+/** 下载模型（多源自动降级） */
 export async function downloadModel(
   size: WhisperModelSize,
   onProgress?: ProgressCallback,
 ): Promise<void> {
-  // 如果已下载则跳过
   if (isModelDownloaded(size)) {
     onProgress?.(100, '模型已存在，无需下载')
     return
@@ -246,7 +218,6 @@ export async function downloadModel(
         onProgress?.(progress, `正在下载 ${size} 模型 (${progress}%)`)
       })
 
-      // 校验下载结果
       if (!isModelDownloaded(size)) {
         throw new Error('下载完成但模型文件校验失败')
       }
@@ -257,22 +228,15 @@ export async function downloadModel(
     } catch (err) {
       console.warn(`[Whisper] 源 ${hostname} 失败: ${(err as Error).message}`)
       lastError = err as Error
-
-      // 清理可能残留的坏文件
       try {
         const modelPath = getModelPath(size)
         if (existsSync(modelPath)) unlinkSync(modelPath)
         const tempPath = modelPath + '.downloading'
         if (existsSync(tempPath)) unlinkSync(tempPath)
-      } catch {
-        // 忽略
-      }
-
-      // 继续尝试下一个源
+      } catch { /* 忽略 */ }
     }
   }
 
-  // 所有源都失败
   const modelPath = getModelPath(size)
   throw new Error(
     `所有下载源均失败。您可以手动下载 ${size} 模型文件并放置到：${modelPath}\n` +
@@ -291,14 +255,14 @@ export function deleteModel(size: WhisperModelSize): void {
 }
 
 // ==========================================
-// 音频转录
+// 音频转录（通过 whisper.cpp CLI）
 // ==========================================
 
 /**
  * 转录音频文件，生成带时间戳的段落和 SRT 字幕文件
  * @param audioPath 音频文件路径（WAV 16kHz 单声道）
  * @param modelSize 模型大小
- * @param outputPath SRT 输出路径
+ * @param outputPath SRT 输出路径（也用于定位输出目录）
  * @param onProgress 进度回调
  * @returns 转录结果
  */
@@ -319,109 +283,143 @@ export async function transcribeAudio(
   }
 
   const modelPath = getModelPath(modelSize)
+  const cliPath = getWhisperCliPath()
+  const outputDir = dirname(outputPath)
+  const outputBaseName = basename(outputPath, '.srt')
+
   console.log(`[Whisper] 开始转录: ${audioPath}`)
   console.log(`[Whisper] 使用模型: ${modelSize} (${modelPath})`)
+  console.log(`[Whisper] CLI 路径: ${cliPath}`)
 
-  onProgress?.(0, '正在加载模型...')
+  onProgress?.(0, '正在启动 Whisper CLI...')
 
-  // 读取模型文件
-  const modelBuffer = await readFile(modelPath)
+  // 构建 CLI 参数
+  const args = [
+    '-m', modelPath,
+    '-f', audioPath,
+    '-l', 'zh',
+    '-t', '4',
+    '--output-srt',
+    '--split-on-word',
+    '--print-progress',
+    '-of', join(outputDir, outputBaseName),
+  ]
 
-  // 创建 Whisper 实例
-  const whisper = new Whisper(modelBuffer)
-
-  onProgress?.(5, '正在解码音频...')
-
-  // 读取并解码音频
-  const audioBuffer = await readFile(audioPath)
-  const samples = await decodeAudioAsync(audioBuffer, audioPath)
-
-  onProgress?.(10, '正在转录...')
-
-  // 收集转录段落
-  const segments: TranscribeSegment[] = []
-  let segmentIndex = 0
-
-  // 配置转录参数
-  const params = new WhisperFullParams(WhisperSamplingStrategy.Greedy)
-  params.language = 'zh'           // 中文
-  params.printProgress = false
-  params.printRealtime = false
-  params.printTimestamps = false
-  params.singleSegment = false     // 获取所有段落
-  params.noTimestamps = false       // 保留时间戳
-  params.tokenTimestamps = true     // token 级时间戳
-  params.splitOnWord = true         // 按词分割
-  params.nThreads = 4              // 使用 4 线程
-
-  // 进度回调
-  params.onProgress = (progress: number) => {
-    // Whisper 进度 0-100，映射到我们的 10-90 范围
-    const mappedProgress = 10 + Math.round(progress * 0.8)
-    onProgress?.(mappedProgress, `正在转录 (${progress}%)...`)
-  }
-
-  // 新段落回调
-  params.onNewSegment = (segment: { text: string; start: number; end: number }) => {
-    const text = segment.text.trim()
-    if (text) {
-      segments.push({
-        id: ++segmentIndex,
-        startTime: segment.start / 1000, // ms → 秒
-        endTime: segment.end / 1000,
-        text,
-      })
-    }
-  }
-
-  // 执行转录
-  const fullText = whisper.full(params, samples)
-
-  onProgress?.(90, '正在生成 SRT 字幕...')
-
-  // 生成 SRT 文件
-  const srtContent = generateSrtContent(segments)
-  writeFileSync(outputPath, srtContent, 'utf-8')
-
-  onProgress?.(100, '转录完成')
-
-  console.log(`[Whisper] 转录完成，共 ${segments.length} 个段落`)
-  console.log(`[Whisper] SRT 文件已保存: ${outputPath}`)
-
-  return {
-    segments,
-    fullText: fullText.trim(),
-    srtPath: outputPath,
-  }
-}
-
-// ==========================================
-// SRT 字幕生成
-// ==========================================
-
-/**
- * 格式化时间为 SRT 格式 (HH:MM:SS,mmm)
- */
-function formatSrtTime(seconds: number): string {
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const secs = Math.floor(seconds % 60)
-  const millis = Math.round((seconds % 1) * 1000)
-
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(millis).padStart(3, '0')}`
-}
-
-/**
- * 根据转录段落生成 SRT 内容
- */
-export function generateSrtContent(segments: TranscribeSegment[]): string {
-  return segments
-    .map((seg) => {
-      return (
-        `${seg.id}\n` +
-        `${formatSrtTime(seg.startTime)} --> ${formatSrtTime(seg.endTime)}\n` +
-        `${seg.text}\n`
-      )
+  return new Promise<TranscribeResult>((resolve, reject) => {
+    const proc = spawn(cliPath, args, {
+      cwd: outputDir,
+      env: { ...process.env },
     })
-    .join('\n')
+
+    let stderr = ''
+
+    proc.stderr.on('data', (data: Buffer) => {
+      const text = data.toString()
+      stderr += text
+
+      // 解析进度：匹配 "progress = XX%"
+      const progressMatches = text.matchAll(/progress\s*=\s*(\d+)%/g)
+      for (const match of progressMatches) {
+        const pct = parseInt(match[1])
+        // Whisper 进度 0-100，映射到我们的 10-90 范围
+        const mapped = 10 + Math.round(pct * 0.8)
+        onProgress?.(mapped, `正在转录 (${pct}%)...`)
+      }
+    })
+
+    proc.stdout.on('data', () => {
+      // 忽略 stdout
+    })
+
+    proc.on('error', (err) => {
+      console.error(`[Whisper] CLI 启动失败: ${err.message}`)
+      reject(new Error(`Whisper CLI 启动失败: ${err.message}`))
+    })
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`[Whisper] CLI 退出码: ${code}`)
+        console.error(`[Whisper] stderr: ${stderr}`)
+        reject(new Error(`Whisper CLI 执行失败 (退出码: ${code}): ${stderr.slice(-500)}`))
+        return
+      }
+
+      onProgress?.(90, '正在解析 SRT 字幕...')
+
+      // 读取 CLI 生成的 SRT 文件
+      const generatedSrtPath = join(outputDir, `${outputBaseName}.srt`)
+      if (!existsSync(generatedSrtPath)) {
+        reject(new Error(`Whisper CLI 未生成 SRT 文件: ${generatedSrtPath}`))
+        return
+      }
+
+      const srtContent = readFileSync(generatedSrtPath, 'utf-8')
+      const segments = parseSrtContent(srtContent)
+      const fullText = segments.map((s) => s.text).join(' ').trim()
+
+      onProgress?.(100, '转录完成')
+
+      console.log(`[Whisper] 转录完成，共 ${segments.length} 个段落`)
+      console.log(`[Whisper] SRT 文件已保存: ${generatedSrtPath}`)
+
+      resolve({
+        segments,
+        fullText,
+        srtPath: generatedSrtPath,
+      })
+    })
+  })
+}
+
+// ==========================================
+// SRT 字幕解析
+// ==========================================
+
+/**
+ * 解析 SRT 格式字幕内容为 TranscribeSegment 数组
+ */
+function parseSrtContent(srtContent: string): TranscribeSegment[] {
+  const segments: TranscribeSegment[] = []
+
+  // SRT 格式：
+  // 1
+  // 00:00:01,000 --> 00:00:05,000
+  // 字幕文本
+  const blocks = srtContent.trim().split(/\n\s*\n/)
+
+  for (const block of blocks) {
+    const lines = block.trim().split('\n')
+    if (lines.length < 3) continue
+
+    // 第一行是序号
+    const id = parseInt(lines[0].trim())
+    if (isNaN(id)) continue
+
+    // 第二行是时间戳
+    const timeLine = lines[1].trim()
+    const timeMatch = timeLine.match(
+      /(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/,
+    )
+    if (!timeMatch) continue
+
+    const startTime =
+      parseInt(timeMatch[1]) * 3600 +
+      parseInt(timeMatch[2]) * 60 +
+      parseInt(timeMatch[3]) +
+      parseInt(timeMatch[4]) / 1000
+
+    const endTime =
+      parseInt(timeMatch[5]) * 3600 +
+      parseInt(timeMatch[6]) * 60 +
+      parseInt(timeMatch[7]) +
+      parseInt(timeMatch[8]) / 1000
+
+    // 剩余行是字幕文本
+    const text = lines.slice(2).join(' ').trim()
+    if (!text) continue
+
+    segments.push({ id, startTime, endTime, text })
+  }
+
+  return segments
 }

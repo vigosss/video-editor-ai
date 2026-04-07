@@ -10,15 +10,15 @@
     "build:dev": "vite build",
     "preview": "vite preview",
     "prepare:ffmpeg": "node scripts/prepare-ffmpeg.js",
-    "package": "yarn run build && yarn run prepare:ffmpeg && electron-builder --dir --win",
-    "dist": "yarn run build && yarn run prepare:ffmpeg && electron-builder --win",
+    "prepare:whisper": "node scripts/prepare-whisper.js",
+    "package": "yarn run build && yarn run prepare:ffmpeg && yarn run prepare:whisper && electron-builder --dir --win",
+    "dist": "yarn run build && yarn run prepare:ffmpeg && yarn run prepare:whisper && electron-builder --win",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
     "@electron-toolkit/utils": "^3.0.0",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "@napi-rs/whisper": "^0.0.4",
     "@uiw/react-textarea-code-editor": "^3.1.1",
     "better-sqlite3": "^11.6.0",
     "clsx": "^2.1.1",

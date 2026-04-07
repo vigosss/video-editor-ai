@@ -4,7 +4,48 @@ import { join } from 'path'
 dotenvConfig({ path: join(__dirname, '../../.env.local') })
 
 import { app, BrowserWindow, shell, ipcMain } from 'electron'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+
+const is = {
+  dev: !app.isPackaged,
+}
+
+const platform = {
+  isWindows: process.platform === 'win32',
+  isMacOS: process.platform === 'darwin',
+  isLinux: process.platform === 'linux',
+}
+
+const electronApp = {
+  setAppUserModelId(id: string) {
+    if (platform.isWindows) {
+      app.setAppUserModelId(is.dev ? process.execPath : id)
+    }
+  },
+}
+
+const optimizer = {
+  watchWindowShortcuts(window: BrowserWindow) {
+    if (!window) return
+    const { webContents } = window
+    webContents.on('before-input-event', (event, input) => {
+      if (input.type === 'keyDown') {
+        if (!is.dev) {
+          if (input.code === 'KeyR' && (input.control || input.meta)) {
+            event.preventDefault()
+          }
+        } else {
+          if (input.code === 'F12') {
+            if (webContents.isDevToolsOpened()) {
+              webContents.closeDevTools()
+            } else {
+              webContents.openDevTools({ mode: 'undocked' })
+            }
+          }
+        }
+      }
+    })
+  },
+}
 import { initDatabase, closeDatabase } from './services/database'
 import { initUpdater } from './services/updater'
 import { registerAllIPC } from './ipc'
@@ -21,7 +62,7 @@ function createWindow(): BrowserWindow {
     autoHideMenuBar: true,
     // macOS 使用隐藏原生标题栏（保留红绿灯按钮），Windows/Linux 无边框
     titleBarStyle: isMac ? 'hiddenInset' : undefined,
-    frame: !isMac,
+    frame: false,
     trafficLightPosition: isMac ? { x: 16, y: 16 } : undefined,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

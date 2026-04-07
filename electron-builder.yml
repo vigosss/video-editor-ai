@@ -16,7 +16,6 @@ asar: true
 
 # 将原生模块从 asar 中解包，确保 .node 二进制文件可正常加载
 asarUnpack:
-  - "node_modules/@napi-rs/**/*"
   - "node_modules/better-sqlite3/**/*"
 
 # 需要打包的文件
@@ -27,10 +26,14 @@ files:
   - "!node_modules/@ffmpeg-installer/**/*"
   - "!node_modules/ffprobe-static/**/*"
 
-# 额外资源：FFmpeg 二进制文件
+# 额外资源：FFmpeg 和 Whisper CLI 二进制文件
 extraResources:
   - from: resources/ffmpeg
     to: ffmpeg
+    filter:
+      - "**/*"
+  - from: resources/whisper
+    to: whisper
     filter:
       - "**/*"
 

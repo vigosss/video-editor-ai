@@ -18,8 +18,6 @@ export default defineConfig({
                 "electron",
                 "better-sqlite3",
                 "fluent-ffmpeg",
-                "@electron-toolkit/utils",
-                "@napi-rs/whisper",
                 "@ffmpeg-installer/ffmpeg",
                 "ffprobe-static",
                 "electron-updater",
@@ -28,6 +26,9 @@ export default defineConfig({
           },
         },
         onstart(options) {
+          // VS Code 会设置 ELECTRON_RUN_AS_NODE=1，导致 Electron 以 Node.js 模式运行
+          // 必须删除此变量，否则 process.type 为 undefined，require('electron') 返回字符串路径
+          delete process.env.ELECTRON_RUN_AS_NODE;
           if (process.env.VSCODE_DEBUG) {
             console.log("[startup] Electron App");
           } else {

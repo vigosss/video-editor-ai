@@ -79,6 +79,26 @@ export function getWhisperModelsDir(): string {
   return ensureDir(join(getUserDataPath(), 'whisper-models'))
 }
 
+/** Whisper CLI 二进制路径（开发/生产环境路径不同） */
+export function getWhisperCliPath(): string {
+  const isWin = process.platform === 'win32'
+  const ext = isWin ? '.exe' : ''
+
+  if (app.isPackaged) {
+    // 生产环境：从 extraResources 中读取打包的 whisper-cli
+    return join(process.resourcesPath, 'whisper', `whisper-cli${ext}`)
+  }
+
+  // 开发环境：使用 resources/whisper/ 目录中的二进制
+  const devPath = join(__dirname, '..', '..', '..', 'resources', 'whisper', `whisper-cli${ext}`)
+  if (existsSync(devPath)) {
+    return devPath
+  }
+
+  // 降级：依赖系统 PATH
+  return 'whisper-cli'
+}
+
 /** 日志目录 */
 export function getLogsDir(): string {
   return ensureDir(join(getUserDataPath(), 'logs'))
