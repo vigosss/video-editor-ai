@@ -47,7 +47,7 @@ export function Sidebar() {
       <div
         className={clsx(
           'relative flex items-center px-4',
-          sidebarCollapsed ? 'h-20 flex-col justify-center gap-2' : 'h-16 gap-3',
+          sidebarCollapsed ? 'h-16 justify-center' : 'h-16 gap-3',
         )}
       >
         <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-accent-500">

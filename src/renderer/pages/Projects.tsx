@@ -212,9 +212,9 @@ export default function Projects() {
 
                   {/* 错误信息 */}
                   {project.status === 'failed' && project.errorMessage && (
-                    <div className="mt-2 flex items-center gap-1.5 text-xs text-red-500">
-                      <AlertCircle className="h-3 w-3" />
-                      <span className="truncate">{project.errorMessage}</span>
+                    <div className="mt-2 flex items-start gap-1.5 overflow-hidden text-xs text-red-500">
+                      <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                      <span className="line-clamp-2">{project.errorMessage}</span>
                     </div>
                   )}
                 </div>
