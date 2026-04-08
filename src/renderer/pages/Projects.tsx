@@ -115,7 +115,7 @@ export default function Projects() {
         <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
           项目列表
         </h2>
-        <Button variant="secondary" size="sm" onClick={() => navigate('/')}>
+        <Button variant="secondary" size="sm" onClick={() => navigate('/create')}>
           <Plus className="h-4 w-4" />
           新建项目
         </Button>
@@ -145,7 +145,7 @@ export default function Projects() {
           <p className="mb-4 text-sm" style={{ color: 'var(--text-tertiary)' }}>
             返回首页创建你的第一个 AI 剪辑项目
           </p>
-          <Button variant="primary" size="sm" onClick={() => navigate('/')}>
+          <Button variant="primary" size="sm" onClick={() => navigate('/create')}>
             <Plus className="h-4 w-4" />
             创建项目
           </Button>

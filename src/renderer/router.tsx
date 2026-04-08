@@ -3,6 +3,7 @@ import { MainLayout } from './components/layout/MainLayout'
 import { lazy, Suspense } from 'react'
 
 // 懒加载页面组件
+const Landing = lazy(() => import('./pages/Landing'))
 const Home = lazy(() => import('./pages/Home'))
 const Projects = lazy(() => import('./pages/Projects'))
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail'))
@@ -26,6 +27,14 @@ export const routes: RouteObject[] = [
     children: [
       {
         index: true,
+        element: (
+          <Suspense fallback={<PageLoading />}>
+            <Landing />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'create',
         element: (
           <Suspense fallback={<PageLoading />}>
             <Home />

@@ -134,6 +134,9 @@ const api: ElectronAPI = {
   windowMaximize: () => ipcRenderer.invoke('window:maximize'),
   windowClose: () => ipcRenderer.invoke('window:close'),
   windowIsMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+
+  // Splash 窗口
+  splashFinished: () => ipcRenderer.send('splash:finished'),
 }
 
 // 通过 contextBridge 安全地暴露 API 给渲染进程

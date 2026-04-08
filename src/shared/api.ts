@@ -144,6 +144,9 @@ export interface ElectronAPI {
   windowClose: () => Promise<void>
   windowIsMaximized: () => Promise<boolean>
 
+  // Splash 窗口
+  splashFinished: () => void
+
   // 自动更新
   updaterCheck: () => Promise<void>
   updaterDownload: () => Promise<void>

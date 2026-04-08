@@ -50,10 +50,41 @@ import { initDatabase, closeDatabase } from './services/database'
 import { initUpdater } from './services/updater'
 import { registerAllIPC } from './ipc'
 
+let mainWindow: BrowserWindow | null = null
+
+function createSplashWindow(): BrowserWindow {
+  const splashWindow = new BrowserWindow({
+    width: 480,
+    height: 360,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    center: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  // 开发环境加载 dev server（splash hash 路由），生产环境加载打包文件
+  if (is.dev) {
+    const devServerUrl = process.env['ELECTRON_RENDERER_URL'] || 'http://localhost:5173'
+    splashWindow.loadURL(`${devServerUrl}#/splash`)
+  } else {
+    splashWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/splash' })
+  }
+
+  return splashWindow
+}
+
 function createWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin'
 
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 960,
@@ -73,16 +104,13 @@ function createWindow(): BrowserWindow {
   })
 
   // 窗口控制 IPC
-  ipcMain.handle('window:minimize', () => mainWindow.minimize())
+  ipcMain.handle('window:minimize', () => mainWindow?.minimize())
   ipcMain.handle('window:maximize', () => {
+    if (!mainWindow) return
     mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
   })
-  ipcMain.handle('window:close', () => mainWindow.close())
-  ipcMain.handle('window:isMaximized', () => mainWindow.isMaximized())
-
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
-  })
+  ipcMain.handle('window:close', () => mainWindow?.close())
+  ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
 
   // 外部链接用系统浏览器打开
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -111,19 +139,45 @@ app.whenReady().then(() => {
   // 注册所有 IPC 处理器
   registerAllIPC()
 
+  // 创建 splash 窗口（先显示）
+  const splashWindow = createSplashWindow()
+
+  // 创建主窗口（隐藏，后台加载）
+  createWindow()
+
+  // 双标志协调：splash 完成 + 主窗口就绪 → 关闭 splash，显示主窗口
+  let mainWindowReady = false
+  let splashFinished = false
+
+  function tryShowMainWindow() {
+    if (mainWindowReady && splashFinished && mainWindow && splashWindow) {
+      splashWindow.close()
+      mainWindow.show()
+    }
+  }
+
+  // 主窗口加载就绪
+  mainWindow?.on('ready-to-show', () => {
+    mainWindowReady = true
+    tryShowMainWindow()
+  })
+
+  // splash 动画完成
+  ipcMain.on('splash:finished', () => {
+    splashFinished = true
+    tryShowMainWindow()
+  })
+
   // macOS 点击 dock 图标时重新创建窗口
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 
-  // 创建主窗口
-  const mainWindow = createWindow()
-
   // 初始化自动更新服务
-  initUpdater(mainWindow)
-
-  // 默认按 Ctrl/Cmd + W 关闭窗口
-  optimizer.watchWindowShortcuts(mainWindow)
+  if (mainWindow) {
+    initUpdater(mainWindow)
+    optimizer.watchWindowShortcuts(mainWindow)
+  }
 })
 
 // 所有窗口关闭时退出应用（Windows/Linux）
