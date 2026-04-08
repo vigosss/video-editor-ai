@@ -1,11 +1,12 @@
-import { ipcMain, dialog, BrowserWindow, shell } from 'electron'
+import { dialog, BrowserWindow, shell } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc'
 import type { FileFilter } from '../../shared/api'
+import { handleWithLog } from '../utils/logger'
 
 /** 注册对话框 IPC 处理器 */
 export function registerDialogIPC(): void {
   // 打开文件选择对话框（单文件）
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.DIALOG_OPEN_FILE,
     async (_event, filters?: FileFilter[]): Promise<string | null> => {
       const win = BrowserWindow.getFocusedWindow()
@@ -24,7 +25,7 @@ export function registerDialogIPC(): void {
   )
 
   // 打开文件选择对话框（多文件）
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.DIALOG_OPEN_FILES,
     async (_event, filters?: FileFilter[]): Promise<string[] | null> => {
       const win = BrowserWindow.getFocusedWindow()
@@ -43,7 +44,7 @@ export function registerDialogIPC(): void {
   )
 
   // 打开目录选择对话框
-  ipcMain.handle(IPC_CHANNELS.DIALOG_OPEN_DIRECTORY, async (): Promise<string | null> => {
+  handleWithLog(IPC_CHANNELS.DIALOG_OPEN_DIRECTORY, async (): Promise<string | null> => {
     const win = BrowserWindow.getFocusedWindow()
     if (!win) return null
 
@@ -58,12 +59,10 @@ export function registerDialogIPC(): void {
   })
 
   // 用系统默认程序打开文件
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.SHELL_OPEN_PATH,
     async (_event, filePath: string): Promise<string> => {
       return shell.openPath(filePath)
     },
   )
-
-  console.log('[ipc] 对话框 IPC 处理器已注册')
 }

@@ -49,6 +49,7 @@ const optimizer = {
 import { initDatabase, closeDatabase } from './services/database'
 import { initUpdater } from './services/updater'
 import { registerAllIPC } from './ipc'
+import { handleWithLog } from './utils/logger'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -104,13 +105,13 @@ function createWindow(): BrowserWindow {
   })
 
   // 窗口控制 IPC
-  ipcMain.handle('window:minimize', () => mainWindow?.minimize())
-  ipcMain.handle('window:maximize', () => {
+  handleWithLog('window:minimize', () => mainWindow?.minimize())
+  handleWithLog('window:maximize', () => {
     if (!mainWindow) return
     mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
   })
-  ipcMain.handle('window:close', () => mainWindow?.close())
-  ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
+  handleWithLog('window:close', () => mainWindow?.close())
+  handleWithLog('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
 
   // 外部链接用系统浏览器打开
   mainWindow.webContents.setWindowOpenHandler((details) => {

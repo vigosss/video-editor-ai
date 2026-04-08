@@ -8,6 +8,7 @@ import { registerWhisperIPC } from './whisper'
 import { registerGlmIPC } from './glm'
 import { registerBgmIPC } from './bgm'
 import { registerUpdaterIPC } from './updater'
+import { registerLogIPC } from './log'
 
 /** 注册所有 IPC 处理器 */
 export function registerAllIPC(): void {
@@ -21,5 +22,5 @@ export function registerAllIPC(): void {
   registerGlmIPC()
   registerBgmIPC()
   registerUpdaterIPC()
-  console.log('[ipc] 所有 IPC 处理器注册完成')
+  registerLogIPC()
 }

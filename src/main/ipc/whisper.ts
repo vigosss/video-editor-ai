@@ -2,7 +2,7 @@
 // Whisper 语音识别 IPC 处理器
 // ==========================================
 
-import { ipcMain, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc'
 import type { WhisperModelSize } from '../../shared/settings'
 import {
@@ -14,12 +14,13 @@ import {
   isModelDownloaded,
 } from '../services/whisper'
 import { getProjectWorkDir } from '../services/ffmpeg'
+import { handleWithLog } from '../utils/logger'
 
 export function registerWhisperIPC(): void {
   // ==========================================
   // 转录音频
   // ==========================================
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.WHISPER_TRANSCRIBE,
     async (event, audioPath: string, modelSize: WhisperModelSize, outputDir?: string) => {
       const srtOutputDir = outputDir ?? getProjectWorkDir('whisper')
@@ -42,7 +43,7 @@ export function registerWhisperIPC(): void {
   // ==========================================
   // 下载模型
   // ==========================================
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.WHISPER_DOWNLOAD_MODEL,
     async (event, modelSize: WhisperModelSize) => {
       await downloadModel(modelSize, (progress, message) => {
@@ -69,20 +70,18 @@ export function registerWhisperIPC(): void {
   // ==========================================
   // 获取所有模型信息
   // ==========================================
-  ipcMain.handle(IPC_CHANNELS.WHISPER_GET_MODELS, async () => {
+  handleWithLog(IPC_CHANNELS.WHISPER_GET_MODELS, async () => {
     return getAvailableModels()
   })
 
   // ==========================================
   // 删除模型
   // ==========================================
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.WHISPER_DELETE_MODEL,
     async (_event, modelSize: WhisperModelSize) => {
       deleteModel(modelSize)
       return { success: true }
     },
   )
-
-  console.log('[ipc] Whisper IPC 处理器已注册')
 }

@@ -74,4 +74,8 @@ export const IPC_CHANNELS = {
   WINDOW_MAXIMIZE: 'window:maximize',
   WINDOW_CLOSE: 'window:close',
   WINDOW_IS_MAXIMIZED: 'window:isMaximized',
+
+  // 日志
+  LOG_GET_PATH: 'log:getPath',
+  LOG_GET_CONTENTS: 'log:getContents',
 } as const

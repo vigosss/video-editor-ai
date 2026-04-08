@@ -2,7 +2,7 @@
 // 视频处理 IPC 处理器
 // ==========================================
 
-import { ipcMain, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc'
 import {
   getVideoInfo as ffmpegGetVideoInfo,
@@ -16,26 +16,27 @@ import {
 import type { ClipParams } from '../services/ffmpeg'
 import { addToQueue, cancelProject, setMainWindow } from '../services/queue'
 import { getProject } from '../services/database'
+import { handleWithLog } from '../utils/logger'
 
 export function registerVideoIPC(): void {
   // ==========================================
   // 检测 FFmpeg 是否可用
   // ==========================================
-  ipcMain.handle(IPC_CHANNELS.VIDEO_CHECK_FFMPEG, async () => {
+  handleWithLog(IPC_CHANNELS.VIDEO_CHECK_FFMPEG, async () => {
     return checkFfmpegAvailable()
   })
 
   // ==========================================
   // 获取视频信息
   // ==========================================
-  ipcMain.handle(IPC_CHANNELS.VIDEO_GET_INFO, async (_event, filePath: string) => {
+  handleWithLog(IPC_CHANNELS.VIDEO_GET_INFO, async (_event, filePath: string) => {
     return ffmpegGetVideoInfo(filePath)
   })
 
   // ==========================================
   // 提取音频
   // ==========================================
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.VIDEO_EXTRACT_AUDIO,
     async (_event, videoPath: string, outputDir?: string) => {
       return ffmpegExtractAudio(videoPath, outputDir)
@@ -45,7 +46,7 @@ export function registerVideoIPC(): void {
   // ==========================================
   // 抽取关键帧
   // ==========================================
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.VIDEO_EXTRACT_FRAMES,
     async (_event, videoPath: string, outputDir: string, interval?: number) => {
       return ffmpegExtractFrames(videoPath, outputDir, interval)
@@ -55,7 +56,7 @@ export function registerVideoIPC(): void {
   // ==========================================
   // 视频剪辑
   // ==========================================
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.VIDEO_CLIP,
     async (_event, videoPath: string, clips: ClipParams[], outputDir: string) => {
       return ffmpegClipVideo(videoPath, clips, outputDir)
@@ -65,7 +66,7 @@ export function registerVideoIPC(): void {
   // ==========================================
   // 视频片段合并
   // ==========================================
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.VIDEO_MERGE,
     async (_event, clipPaths: string[], outputPath: string) => {
       return ffmpegMergeClips(clipPaths, outputPath)
@@ -75,7 +76,7 @@ export function registerVideoIPC(): void {
   // ==========================================
   // 字幕嵌入
   // ==========================================
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.VIDEO_EMBED_SUBTITLES,
     async (_event, videoPath: string, srtPath: string, outputPath: string) => {
       return ffmpegEmbedSubtitles(videoPath, srtPath, outputPath)
@@ -85,7 +86,7 @@ export function registerVideoIPC(): void {
   // ==========================================
   // 开始处理流程
   // ==========================================
-  ipcMain.handle(IPC_CHANNELS.VIDEO_START_PROCESS, async (event, projectId: string) => {
+  handleWithLog(IPC_CHANNELS.VIDEO_START_PROCESS, async (event, projectId: string) => {
     // 验证项目存在
     const project = getProject(projectId)
     if (!project) {
@@ -105,12 +106,10 @@ export function registerVideoIPC(): void {
   // ==========================================
   // 取消处理流程
   // ==========================================
-  ipcMain.handle(IPC_CHANNELS.VIDEO_CANCEL_PROCESS, async (_event, projectId: string) => {
+  handleWithLog(IPC_CHANNELS.VIDEO_CANCEL_PROCESS, async (_event, projectId: string) => {
     const cancelled = cancelProject(projectId)
     if (!cancelled) {
       throw new Error(`未找到正在处理的项目: ${projectId}`)
     }
   })
-
-  console.log('[ipc] 视频 IPC 处理器已注册')
 }

@@ -21,6 +21,7 @@ export default defineConfig({
                 "@ffmpeg-installer/ffmpeg",
                 "ffprobe-static",
                 "electron-updater",
+                "electron-log",
               ],
             },
           },

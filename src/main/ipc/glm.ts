@@ -1,12 +1,13 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc'
 import { analyzeVideo, validateApiKey, GLMError } from '../services/glm'
 import type { AnalyzeVideoOptions } from '../services/glm'
+import { handleWithLog } from '../utils/logger'
 
 /** 注册 GLM 相关 IPC 处理器 */
 export function registerGlmIPC(): void {
   // GLM 分析视频
-  ipcMain.handle(IPC_CHANNELS.GLM_ANALYZE, async (event, options: AnalyzeVideoOptions) => {
+  handleWithLog(IPC_CHANNELS.GLM_ANALYZE, async (event, options: AnalyzeVideoOptions) => {
     const win = BrowserWindow.fromWebContents(event.sender)
 
     const onProgress = (progress: number, message: string) => {
@@ -40,7 +41,7 @@ export function registerGlmIPC(): void {
   })
 
   // GLM API Key 验证
-  ipcMain.handle(IPC_CHANNELS.GLM_VALIDATE_KEY, async (_event, apiKey: string) => {
+  handleWithLog(IPC_CHANNELS.GLM_VALIDATE_KEY, async (_event, apiKey: string) => {
     try {
       const valid = await validateApiKey(apiKey)
       return { success: true, data: valid }
@@ -48,6 +49,4 @@ export function registerGlmIPC(): void {
       return { success: false, data: false }
     }
   })
-
-  console.log('[ipc] GLM IPC 处理器注册完成')
 }

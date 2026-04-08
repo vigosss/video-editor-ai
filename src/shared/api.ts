@@ -153,6 +153,16 @@ export interface ElectronAPI {
   // Splash 窗口
   splashFinished: () => void
 
+  // 日志
+  getLogPath: () => Promise<string>
+  getLogContents: (options?: { tail?: number }) => Promise<{
+    path: string
+    size: number
+    modified: string
+    content: string
+    totalLines: number
+  }>
+
   // 自动更新
   updaterCheck: () => Promise<void>
   updaterDownload: () => Promise<void>

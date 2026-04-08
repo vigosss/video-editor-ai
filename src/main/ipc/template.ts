@@ -1,4 +1,3 @@
-import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc'
 import {
   listPromptTemplates,
@@ -7,16 +6,17 @@ import {
   deletePromptTemplate,
 } from '../services/database'
 import type { PromptTemplate } from '../../shared/prompt'
+import { handleWithLog } from '../utils/logger'
 
 /** 注册 Prompt 模板相关 IPC 处理器 */
 export function registerTemplateIPC(): void {
   // 获取所有模板
-  ipcMain.handle(IPC_CHANNELS.TEMPLATE_LIST, async (): Promise<PromptTemplate[]> => {
+  handleWithLog(IPC_CHANNELS.TEMPLATE_LIST, async (): Promise<PromptTemplate[]> => {
     return listPromptTemplates()
   })
 
   // 创建模板
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.TEMPLATE_CREATE,
     async (_event, name: string, content: string): Promise<PromptTemplate> => {
       if (!name || typeof name !== 'string') {
@@ -27,7 +27,7 @@ export function registerTemplateIPC(): void {
   )
 
   // 更新模板
-  ipcMain.handle(
+  handleWithLog(
     IPC_CHANNELS.TEMPLATE_UPDATE,
     async (_event, id: string, name: string, content: string): Promise<PromptTemplate> => {
       if (!id || typeof id !== 'string') {
@@ -38,12 +38,10 @@ export function registerTemplateIPC(): void {
   )
 
   // 删除模板
-  ipcMain.handle(IPC_CHANNELS.TEMPLATE_DELETE, async (_event, id: string): Promise<void> => {
+  handleWithLog(IPC_CHANNELS.TEMPLATE_DELETE, async (_event, id: string): Promise<void> => {
     if (!id || typeof id !== 'string') {
       throw new Error('模板 ID 无效')
     }
     deletePromptTemplate(id)
   })
-
-  console.log('[ipc] 模板 IPC 处理器已注册')
 }

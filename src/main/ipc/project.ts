@@ -1,4 +1,3 @@
-import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc'
 import {
   createProject,
@@ -9,11 +8,12 @@ import {
   getClipsByProject,
 } from '../services/database'
 import type { CreateProjectParams, Project } from '../../shared/project'
+import { handleWithLog } from '../utils/logger'
 
 /** 注册项目相关 IPC 处理器 */
 export function registerProjectIPC(): void {
   // 创建项目
-  ipcMain.handle(IPC_CHANNELS.PROJECT_CREATE, async (_event, params: CreateProjectParams): Promise<Project> => {
+  handleWithLog(IPC_CHANNELS.PROJECT_CREATE, async (_event, params: CreateProjectParams): Promise<Project> => {
     if (!params.name?.trim()) {
       throw new Error('项目名称不能为空')
     }
@@ -24,12 +24,12 @@ export function registerProjectIPC(): void {
   })
 
   // 获取项目列表
-  ipcMain.handle(IPC_CHANNELS.PROJECT_LIST, async (): Promise<Project[]> => {
+  handleWithLog(IPC_CHANNELS.PROJECT_LIST, async (): Promise<Project[]> => {
     return listProjects()
   })
 
   // 获取单个项目
-  ipcMain.handle(IPC_CHANNELS.PROJECT_GET, async (_event, id: string): Promise<Project | null> => {
+  handleWithLog(IPC_CHANNELS.PROJECT_GET, async (_event, id: string): Promise<Project | null> => {
     if (!id) {
       throw new Error('项目 ID 不能为空')
     }
@@ -37,7 +37,7 @@ export function registerProjectIPC(): void {
   })
 
   // 更新项目
-  ipcMain.handle(IPC_CHANNELS.PROJECT_UPDATE, async (_event, id: string, data: Partial<Project>): Promise<Project> => {
+  handleWithLog(IPC_CHANNELS.PROJECT_UPDATE, async (_event, id: string, data: Partial<Project>): Promise<Project> => {
     if (!id) {
       throw new Error('项目 ID 不能为空')
     }
@@ -45,7 +45,7 @@ export function registerProjectIPC(): void {
   })
 
   // 删除项目
-  ipcMain.handle(IPC_CHANNELS.PROJECT_DELETE, async (_event, id: string): Promise<void> => {
+  handleWithLog(IPC_CHANNELS.PROJECT_DELETE, async (_event, id: string): Promise<void> => {
     if (!id) {
       throw new Error('项目 ID 不能为空')
     }
@@ -53,12 +53,10 @@ export function registerProjectIPC(): void {
   })
 
   // 获取项目的剪辑片段
-  ipcMain.handle(IPC_CHANNELS.PROJECT_GET_CLIPS, async (_event, projectId: string) => {
+  handleWithLog(IPC_CHANNELS.PROJECT_GET_CLIPS, async (_event, projectId: string) => {
     if (!projectId) {
       throw new Error('项目 ID 不能为空')
     }
     return getClipsByProject(projectId)
   })
-
-  console.log('[ipc] 项目 IPC 处理器已注册')
 }

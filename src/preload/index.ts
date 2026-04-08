@@ -142,6 +142,10 @@ const api: ElectronAPI = {
 
   // Splash 窗口
   splashFinished: () => ipcRenderer.send('splash:finished'),
+
+  // 日志
+  getLogPath: () => ipcRenderer.invoke('log:getPath'),
+  getLogContents: (options?: { tail?: number }) => ipcRenderer.invoke('log:getContents', options),
 }
 
 // 通过 contextBridge 安全地暴露 API 给渲染进程
