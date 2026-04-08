@@ -461,8 +461,15 @@ export default function ProjectDetail() {
         <div className="grid grid-cols-2 gap-4">
           {/* 原视频 */}
           <div
-            className="flex flex-col items-center justify-center rounded-xl border p-6"
+            className={`flex flex-col items-center justify-center rounded-xl border p-6 ${
+              project.status === 'completed' ? 'cursor-pointer' : ''
+            }`}
             style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}
+            onClick={() => {
+              if (project.status === 'completed' && project.videoPath) {
+                window.electronAPI.openPath(project.videoPath)
+              }
+            }}
           >
             <FileVideo className="mb-2 h-10 w-10" style={{ color: 'var(--text-tertiary)' }} />
             <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>原视频</p>
@@ -472,10 +479,17 @@ export default function ProjectDetail() {
           </div>
           {/* 剪辑后视频 */}
           <div
-            className="flex flex-col items-center justify-center rounded-xl border p-6"
+            className={`flex flex-col items-center justify-center rounded-xl border p-6 ${
+              project.status === 'completed' ? 'cursor-pointer' : ''
+            }`}
             style={{
               borderColor: 'var(--border-active)',
               background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05))',
+            }}
+            onClick={() => {
+              if (project.status === 'completed' && project.outputPath) {
+                window.electronAPI.openPath(project.outputPath)
+              }
             }}
           >
             <Play className="mb-2 h-10 w-10 text-primary-400" />

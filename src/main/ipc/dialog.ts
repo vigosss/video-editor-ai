@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog, BrowserWindow, shell } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc'
 import type { FileFilter } from '../../shared/api'
 
@@ -56,6 +56,14 @@ export function registerDialogIPC(): void {
     }
     return result.filePaths[0]
   })
+
+  // 用系统默认程序打开文件
+  ipcMain.handle(
+    IPC_CHANNELS.SHELL_OPEN_PATH,
+    async (_event, filePath: string): Promise<string> => {
+      return shell.openPath(filePath)
+    },
+  )
 
   console.log('[ipc] 对话框 IPC 处理器已注册')
 }

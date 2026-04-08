@@ -329,8 +329,8 @@ export async function runPipeline(
     // 更新项目状态为完成
     updateProjectStatus(projectId, 'completed', 'completed', 100)
 
-    // 更新输出路径
-    updateProject(projectId, { outputPath: join(project.outputPath) })
+    // 更新输出路径为最终视频的完整文件路径
+    updateProject(projectId, { outputPath })
 
     console.log(`[Pipeline] 项目处理完成: ${projectId}, 输出: ${outputPath}`)
 

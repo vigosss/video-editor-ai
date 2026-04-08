@@ -83,6 +83,9 @@ const api: ElectronAPI = {
   openFilesDialog: (filters) => ipcRenderer.invoke('dialog:openFiles', filters),
   openDirectoryDialog: () => ipcRenderer.invoke('dialog:openDirectory'),
 
+  // 系统
+  openPath: (path) => ipcRenderer.invoke('shell:openPath', path),
+
   // 自动更新
   updaterCheck: () => ipcRenderer.invoke('updater:check'),
   updaterDownload: () => ipcRenderer.invoke('updater:download'),

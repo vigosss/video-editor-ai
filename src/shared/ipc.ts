@@ -61,6 +61,9 @@ export const IPC_CHANNELS = {
   DIALOG_OPEN_FILES: 'dialog:openFiles',
   DIALOG_OPEN_DIRECTORY: 'dialog:openDirectory',
 
+  // 系统
+  SHELL_OPEN_PATH: 'shell:openPath',
+
   // 窗口控制
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_MAXIMIZE: 'window:maximize',
