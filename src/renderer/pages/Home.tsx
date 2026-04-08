@@ -14,6 +14,7 @@ import {
   Settings2,
   Plus,
   Trash2,
+  FileText,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Select } from '../components/ui/Select'
@@ -28,6 +29,7 @@ export default function Home() {
 
   // 表单状态
   const [videoPaths, setVideoPaths] = useState<string[]>([])
+  const [projectNameInput, setProjectNameInput] = useState('')
   const [prompt, setPrompt] = useState('')
   const [model, setModel] = useState<GLMModel>(settings.defaultModel)
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>(settings.defaultAnalysisMode)
@@ -121,9 +123,10 @@ export default function Home() {
     setCreating(true)
     try {
       const firstVideoName = getFileName(videoPaths[0]).replace(/\.[^.]+$/, '') || '未命名项目'
-      const projectName = videoPaths.length > 1
+      const autoName = videoPaths.length > 1
         ? `${firstVideoName} 等${videoPaths.length}个视频`
         : firstVideoName
+      const projectName = projectNameInput.trim() || autoName
 
       const project = await window.electronAPI.createProject({
         name: projectName,
@@ -301,6 +304,31 @@ export default function Home() {
             </Button>
           </div>
         )}
+      </motion.div>
+
+      {/* 项目名称输入区 */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.15 }}
+        className="glass-card mb-6 p-6"
+      >
+        <div className="mb-3">
+          <span
+            className="text-sm font-medium"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            <FileText className="mr-1.5 inline h-4 w-4 text-primary-400" />
+            项目名称
+          </span>
+        </div>
+        <input
+          type="text"
+          className="input-glow w-full"
+          placeholder="请输入项目名称（留空则默认使用视频文件名）"
+          value={projectNameInput}
+          onChange={(e) => setProjectNameInput(e.target.value)}
+        />
       </motion.div>
 
       {/* Prompt 输入区 */}
