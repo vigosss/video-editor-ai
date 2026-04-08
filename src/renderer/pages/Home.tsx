@@ -47,7 +47,7 @@ export default function Home() {
   }, [])
 
   /** 获取文件名 */
-  const getFileName = (path: string) => path.split('/').pop() || path.split('\\').pop() || path
+  const getFileName = (path: string) => path.split('\\').pop()?.split('/').pop() || path
 
   /** 选择视频文件（多选） */
   const handleSelectFiles = useCallback(async () => {

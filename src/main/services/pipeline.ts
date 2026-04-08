@@ -146,8 +146,9 @@ export async function runPipeline(
     }
 
     // 输出路径（多视频用项目名，单视频用原视频名）
+    // 注意：project.name 在旧数据中可能包含路径分隔符，用 basename 确保只取文件名部分
     const outputName = project.videoPaths && project.videoPaths.length > 1
-      ? `${project.name}_final.mp4`
+      ? `${basename(project.name)}_final.mp4`
       : `${basename(workingVideoPath, extname(workingVideoPath))}_final.mp4`
     const outputPath = join(project.outputPath, outputName)
 
