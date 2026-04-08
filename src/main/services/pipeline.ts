@@ -11,11 +11,14 @@ import type { PipelineProgress, PipelineStepConfig } from '../../shared/pipeline
 import type { Project, ProcessingStep } from '../../shared/project'
 
 import { getProject, updateProjectStatus, updateProject, createClips, getClipsByProject, deleteClipsByProject } from './database'
-import { getVideoInfo, extractAudio, extractFrames, clipVideo, mergeClips, embedSubtitles, getProjectWorkDir, normalizeAndConcat } from './ffmpeg'
+import { getVideoInfo, extractAudio, extractFrames, clipVideo, mergeClips, mergeClipsWithTransitions, mixAudioStreams, embedSubtitles, getProjectWorkDir, normalizeAndConcat } from './ffmpeg'
 import { transcribeAudio, isModelDownloaded } from './whisper'
 import { analyzeVideo } from './glm'
+import { getBeatsForTrack, alignClipsToBeats, segmentByBeats } from './beatDetection'
+import { getBgmTrackPath } from './bgm'
 import type { ClipParams } from './ffmpeg'
 import type { AnalyzeVideoOptions } from './glm'
+import type { BeatInfo } from '../../shared/bgm'
 import { getAllSettings } from './database'
 
 // ==========================================
@@ -86,9 +89,14 @@ export async function runPipeline(
   const srtPath = join(workDir, 'subtitles.srt')
   const mergedPath = join(workDir, 'merged.mp4')
 
-  // 根据字幕需求获取活跃步骤
+  // 根据项目配置获取活跃步骤
   const needsSubtitles = project.needsSubtitles
-  const activeSteps = getActiveSteps(needsSubtitles)
+  const activeSteps = getActiveSteps({
+    needsSubtitles,
+    bgmTrackId: project.bgmTrackId,
+    beatSyncMode: project.beatSyncMode,
+    audioMode: project.audioMode,
+  })
 
   // 进度发送辅助函数（基于活跃步骤索引）
   const sendProgress = (stepKey: string, stepProgress: number, message: string) => {
@@ -232,6 +240,25 @@ export async function runPipeline(
     sendProgress('extracting_frames', 100, `关键帧抽取完成，共 ${framePaths.length} 帧`)
 
     // ==========================================
+    // 步骤: 节拍检测（仅 BGM + 节拍同步启用时执行）
+    // ==========================================
+    let beatInfo: BeatInfo | null = null
+
+    if (project.bgmTrackId && project.beatSyncMode !== 'none') {
+      sendProgress('detecting_beats', 0, '正在分析背景音乐节拍...')
+      checkCancelled()
+
+      try {
+        beatInfo = await getBeatsForTrack(project.bgmTrackId)
+        sendProgress('detecting_beats', 100, `节拍分析完成，检测到 ${beatInfo.timestamps.length} 个节拍，BPM: ${Math.round(beatInfo.bpm)}`)
+      } catch (err) {
+        console.warn(`[Pipeline] 节拍检测失败，跳过节拍同步: ${(err as Error).message}`)
+        beatInfo = null
+        sendProgress('detecting_beats', 100, '节拍检测失败，将跳过节拍同步')
+      }
+    }
+
+    // ==========================================
     // 步骤: AI 分析 (GLM)
     // ==========================================
     sendProgress('analyzing', 0, '正在准备 AI 分析...')
@@ -242,6 +269,7 @@ export async function runPipeline(
       throw new Error('未配置 GLM API Key，请在设置中填写')
     }
 
+    // 根据节拍同步模式准备分析选项
     const analyzeOptions: AnalyzeVideoOptions = {
       framePaths,
       subtitleText,
@@ -249,6 +277,18 @@ export async function runPipeline(
       model: project.model,
       analysisMode: project.analysisMode,
       systemPrompt: settings.systemPrompt,
+    }
+
+    // ai_with_beats 模式：将节拍信息传给 AI
+    if (project.beatSyncMode === 'ai_with_beats' && beatInfo) {
+      analyzeOptions.beatTimestamps = beatInfo.timestamps
+      analyzeOptions.beatSyncMode = 'ai_with_beats'
+    }
+
+    // beat_segment 模式：按节拍分段，提取每段代表帧
+    if (project.beatSyncMode === 'beat_segment' && beatInfo) {
+      analyzeOptions.beatTimestamps = beatInfo.timestamps
+      analyzeOptions.beatSyncMode = 'beat_segment'
     }
 
     const analysisResult = await analyzeVideo(
@@ -263,8 +303,22 @@ export async function runPipeline(
       throw new Error('AI 分析完成但未返回有效的剪辑片段，请尝试调整 Prompt 或切换模型')
     }
 
+    // 对齐片段时间到节拍（ai_then_align 模式）
+    let finalClips = analysisResult.clips
+    if (project.beatSyncMode === 'ai_then_align' && beatInfo) {
+      const alignedClips = alignClipsToBeats(
+        analysisResult.clips.map(c => ({ startTime: c.startTime, endTime: c.endTime })),
+        beatInfo,
+      )
+      finalClips = analysisResult.clips.map((c, i) => ({
+        ...c,
+        startTime: alignedClips[i].startTime,
+        endTime: alignedClips[i].endTime,
+      }))
+      console.log(`[Pipeline] 已将 ${finalClips.length} 个片段对齐到节拍`)
+    }
+
     // 保存剪辑片段到数据库
-    // 先清除旧的片段
     const existingClips = getClipsByProject(projectId)
     if (existingClips.length > 0) {
       deleteClipsByProject(projectId)
@@ -272,7 +326,7 @@ export async function runPipeline(
 
     const clipRecords = createClips(
       projectId,
-      analysisResult.clips.map((c) => ({
+      finalClips.map((c) => ({
         startTime: c.startTime,
         endTime: c.endTime,
         reason: c.reason,
@@ -287,48 +341,85 @@ export async function runPipeline(
     sendProgress('clipping', 0, '正在剪辑视频...')
     checkCancelled()
 
-    const clipParams: ClipParams[] = analysisResult.clips.map((c) => ({
+    const clipParams: ClipParams[] = finalClips.map((c) => ({
       startTime: c.startTime,
       endTime: c.endTime,
       reason: c.reason,
     }))
 
-    // 剪辑视频片段（保持 AI 返回的顺序）
+    // 剪辑视频片段
     const clipPaths = await clipVideo(workingVideoPath, clipParams, clipsDir)
 
     sendProgress('clipping', 60, `已剪辑 ${clipPaths.length} 个片段，正在合并...`)
 
-    // 合并片段
-    const mergedResult = await mergeClips(clipPaths, mergedPath)
-
-    sendProgress('clipping', 100, '视频剪辑与合并完成')
+    // 合并片段（根据是否有转场效果选择不同方式）
+    let mergedResult: string
+    if (project.transitionType && project.transitionType !== 'none' && clipPaths.length > 1) {
+      mergedResult = await mergeClipsWithTransitions(
+        clipPaths,
+        mergedPath,
+        project.transitionType,
+        project.transitionDuration,
+      )
+      sendProgress('clipping', 100, `视频剪辑与合并完成（${project.transitionType} 转场）`)
+    } else {
+      mergedResult = await mergeClips(clipPaths, mergedPath)
+      sendProgress('clipping', 100, '视频剪辑与合并完成')
+    }
 
     // ==========================================
     // 步骤: 字幕嵌入（仅需要字幕时执行）
     // ==========================================
+    let videoBeforeAudioMix = mergedResult
+
     if (needsSubtitles) {
       sendProgress('embedding_subs', 0, '正在嵌入字幕...')
       checkCancelled()
 
-      // 检查字幕文件是否存在且非空
+      // 字幕嵌入的输出路径
+      const subsOutputPath = join(workDir, 'with_subs.mp4')
+
       if (existsSync(srtPath)) {
         const srtStat = statSync(srtPath)
         if (srtStat.size > 0) {
-          await embedSubtitles(mergedResult, srtPath, outputPath)
-          sendProgress('embedding_subs', 100, '字幕嵌入完成，视频处理完成！')
+          await embedSubtitles(mergedResult, srtPath, subsOutputPath)
+          videoBeforeAudioMix = subsOutputPath
+          sendProgress('embedding_subs', 100, '字幕嵌入完成')
         } else {
-          // 字幕文件为空，直接复制合并后的文件作为输出
-          copyFileSync(mergedResult, outputPath)
-          sendProgress('embedding_subs', 100, '无字幕内容，视频处理完成！')
+          sendProgress('embedding_subs', 100, '无字幕内容')
         }
       } else {
-        // 没有字幕文件，直接复制合并后的文件作为输出
-        copyFileSync(mergedResult, outputPath)
-        sendProgress('embedding_subs', 100, '无字幕文件，视频处理完成！')
+        sendProgress('embedding_subs', 100, '无字幕文件')
+      }
+    }
+
+    // ==========================================
+    // 步骤: 音频混音（仅 BGM 启用且非原始音频模式时执行）
+    // ==========================================
+    if (project.bgmTrackId && project.audioMode !== 'original') {
+      sendProgress('mixing_audio', 0, '正在混合背景音乐...')
+      checkCancelled()
+
+      try {
+        const bgmPath = getBgmTrackPath(project.bgmTrackId)
+        await mixAudioStreams(videoBeforeAudioMix, bgmPath, outputPath, {
+          mode: project.audioMode,
+          bgmVolume: project.bgmVolume,
+          originalVolume: project.originalAudioVolume,
+          bgmLoop: true,
+          bgmFadeIn: 1.0,
+          bgmFadeOut: 1.0,
+        })
+        sendProgress('mixing_audio', 100, '音频混音完成')
+      } catch (err) {
+        console.warn(`[Pipeline] BGM 混音失败: ${(err as Error).message}`)
+        // 混音失败时直接复制视频
+        copyFileSync(videoBeforeAudioMix, outputPath)
+        sendProgress('mixing_audio', 100, '音频混音失败，已跳过')
       }
     } else {
-      // 不需要字幕，直接复制合并结果作为最终输出
-      copyFileSync(mergedResult, outputPath)
+      // 不需要混音，直接复制为最终输出
+      copyFileSync(videoBeforeAudioMix, outputPath)
     }
 
     // ==========================================

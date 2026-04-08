@@ -36,6 +36,82 @@ export const GLM_MODEL_ID_MAP: Record<string, string> = {
   'GLM-4.7-FlashX': 'glm-4.7-flash',
 }
 
+/** 节拍同步模式选项 */
+export const BEAT_SYNC_MODE_OPTIONS = [
+  { value: 'none', label: '不使用节拍同步' },
+  { value: 'ai_with_beats', label: 'AI + 节拍同步（推荐）' },
+  { value: 'beat_segment', label: '节拍分段 + AI 挑选' },
+  { value: 'ai_then_align', label: 'AI 先选，后对齐节拍' },
+]
+
+/** 节拍同步模式映射 */
+export const BEAT_SYNC_MODE_LABEL_MAP: Record<string, string> = {
+  none: '不使用',
+  ai_with_beats: 'AI + 节拍同步',
+  beat_segment: '节拍分段 + AI 挑选',
+  ai_then_align: 'AI 先选后对齐',
+}
+
+/** 转场效果选项 */
+export const TRANSITION_TYPE_OPTIONS = [
+  { value: 'none', label: '无（硬切）', group: '基础' },
+  { value: 'fade', label: '淡入淡出', group: '淡化' },
+  { value: 'fadeblack', label: '黑场淡入淡出', group: '淡化' },
+  { value: 'fadewhite', label: '白场淡入淡出', group: '淡化' },
+  { value: 'dissolve', label: '溶解', group: '淡化' },
+  { value: 'wipeleft', label: '向左擦除', group: '擦除' },
+  { value: 'wiperight', label: '向右擦除', group: '擦除' },
+  { value: 'wipeup', label: '向上擦除', group: '擦除' },
+  { value: 'wipedown', label: '向下擦除', group: '擦除' },
+  { value: 'slideleft', label: '向左滑动', group: '滑动' },
+  { value: 'slideright', label: '向右滑动', group: '滑动' },
+  { value: 'slideup', label: '向上滑动', group: '滑动' },
+  { value: 'slidedown', label: '向下滑动', group: '滑动' },
+  { value: 'circlecrop', label: '圆形裁剪', group: '形状' },
+  { value: 'circleopen', label: '圆形展开', group: '形状' },
+  { value: 'circleclose', label: '圆形收拢', group: '形状' },
+  { value: 'radial', label: '放射', group: '形状' },
+  { value: 'smoothleft', label: '平滑向左', group: '平滑' },
+  { value: 'smoothright', label: '平滑向右', group: '平滑' },
+  { value: 'smoothup', label: '平滑向上', group: '平滑' },
+  { value: 'smoothdown', label: '平滑向下', group: '平滑' },
+  { value: 'horzopen', label: '水平展开', group: '展开/收拢' },
+  { value: 'horzclose', label: '水平收拢', group: '展开/收拢' },
+  { value: 'vertopen', label: '垂直展开', group: '展开/收拢' },
+  { value: 'vertclose', label: '垂直收拢', group: '展开/收拢' },
+  { value: 'diagtl', label: '左上对角', group: '对角' },
+  { value: 'diagtr', label: '右上对角', group: '对角' },
+  { value: 'diagbl', label: '左下对角', group: '对角' },
+  { value: 'diagbr', label: '右下对角', group: '对角' },
+  { value: 'hlslice', label: '水平左切片', group: '切片' },
+  { value: 'hrslice', label: '水平右切片', group: '切片' },
+  { value: 'vuslice', label: '垂直上切片', group: '切片' },
+  { value: 'vdslice', label: '垂直下切片', group: '切片' },
+  { value: 'pixelize', label: '像素化', group: '特效' },
+  { value: 'squeezeh', label: '水平挤压', group: '特效' },
+  { value: 'squeezev', label: '垂直挤压', group: '特效' },
+  { value: 'zoomin', label: '放大', group: '特效' },
+]
+
+/** 转场效果映射 */
+export const TRANSITION_TYPE_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  TRANSITION_TYPE_OPTIONS.map(o => [o.value, o.label])
+)
+
+/** 音频模式选项 */
+export const AUDIO_MODE_OPTIONS = [
+  { value: 'original', label: '保留原始音频' },
+  { value: 'bgm_only', label: '仅背景音乐' },
+  { value: 'mixed', label: '混合（原声 + BGM）' },
+]
+
+/** 音频模式映射 */
+export const AUDIO_MODE_LABEL_MAP: Record<string, string> = {
+  original: '原始音频',
+  bgm_only: '仅 BGM',
+  mixed: '混合',
+}
+
 /** 默认系统提示词 */
 export const DEFAULT_SYSTEM_PROMPT = `你是一位专业的房车销售视频分析师和剪辑顾问。你的任务是分析上传的房车展示视频，并提供精准的剪辑建议，帮助销售团队制作高转化率的营销视频。
 

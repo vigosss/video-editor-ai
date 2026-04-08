@@ -8,6 +8,7 @@ import { exec } from 'child_process'
 import { existsSync, unlinkSync, readdirSync, mkdirSync, writeFileSync, copyFileSync } from 'fs'
 import { join, basename, extname } from 'path'
 import type { VideoInfo } from '../../shared/video'
+import type { AudioMixOptions } from '../../shared/bgm'
 
 // ==========================================
 // FFmpeg 初始化
@@ -608,6 +609,277 @@ export async function normalizeAndConcat(
 
   if (!existsSync(outputPath)) {
     throw new Error('视频合并完成但输出文件不存在')
+  }
+
+  return outputPath
+}
+
+// ==========================================
+// 音频解码（用于节拍检测）
+// ==========================================
+
+/**
+ * 将音频文件解码为 WAV 格式
+ * @param inputPath 输入音频文件路径（MP3/AAC 等）
+ * @param outputPath 输出 WAV 文件路径
+ * @param sampleRate 采样率（默认 44100Hz）
+ */
+export async function decodeAudioToWav(
+  inputPath: string,
+  outputPath: string,
+  sampleRate: number = 44100,
+): Promise<string> {
+  if (!existsSync(inputPath)) {
+    throw new Error(`音频文件不存在: ${inputPath}`)
+  }
+
+  safeUnlink(outputPath)
+
+  const cmd = ffmpeg(inputPath)
+    .audioCodec('pcm_s16le')
+    .audioFrequency(sampleRate)
+    .audioChannels(2)
+    .format('wav')
+    .output(outputPath)
+
+  await runCommand(cmd)
+
+  if (!existsSync(outputPath)) {
+    throw new Error('音频解码完成但输出文件不存在')
+  }
+
+  return outputPath
+}
+
+// ==========================================
+// 带转场的视频合并
+// ==========================================
+
+/**
+ * 将多个视频片段合并为一个视频（带转场效果）
+ * 使用 FFmpeg xfade 滤镜实现转场
+ * @param clipPaths 视频片段路径数组
+ * @param outputPath 输出文件路径
+ * @param transitionType 转场效果类型
+ * @param transitionDuration 转场时长（秒）
+ */
+export async function mergeClipsWithTransitions(
+  clipPaths: string[],
+  outputPath: string,
+  transitionType: string,
+  transitionDuration: number = 0.5,
+): Promise<string> {
+  if (clipPaths.length === 0) {
+    throw new Error('视频片段列表不能为空')
+  }
+
+  // 校验所有片段文件存在
+  for (const p of clipPaths) {
+    if (!existsSync(p)) {
+      throw new Error(`视频片段不存在: ${p}`)
+    }
+  }
+
+  // 单片段直接复制
+  if (clipPaths.length === 1) {
+    safeUnlink(outputPath)
+    copyFileSync(clipPaths[0], outputPath)
+    return outputPath
+  }
+
+  safeUnlink(outputPath)
+
+  // 探测每个片段的时长
+  const durations: number[] = []
+  for (const p of clipPaths) {
+    const info = await getVideoInfo(p)
+    durations.push(info.duration)
+  }
+
+  // 构建 xfade 滤镜链
+  const videoFilters: string[] = []
+  const audioFilters: string[] = []
+
+  // 检查每个片段是否有音频
+  const hasAudioStreams: boolean[] = []
+  for (const p of clipPaths) {
+    const probeData = await probeVideo(p)
+    hasAudioStreams.push(probeData.streams.some(s => s.codec_type === 'audio'))
+  }
+  const anyHasAudio = hasAudioStreams.some(a => a)
+
+  // 计算 xfade offset
+  let currentOffset = durations[0] - transitionDuration
+
+  for (let i = 0; i < clipPaths.length - 1; i++) {
+    const inputLabel1 = i === 0 ? '[0:v]' : `[v${i - 1}]`
+    const inputLabel2 = `[${i + 1}:v]`
+    const outputLabel = i === clipPaths.length - 2 ? '[vout]' : `[v${i}]`
+
+    videoFilters.push(
+      `${inputLabel1}${inputLabel2}xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${currentOffset.toFixed(3)}${outputLabel}`,
+    )
+
+    // 音频转场
+    if (anyHasAudio) {
+      const audioInput1 = i === 0 ? '[0:a]' : `[a${i - 1}]`
+      const audioInput2 = `[${i + 1}:a]`
+      const audioOutputLabel = i === clipPaths.length - 2 ? '[aout]' : `[a${i}]`
+      audioFilters.push(
+        `${audioInput1}${audioInput2}acrossfade=d=${transitionDuration}:c1=tri:c2=tri${audioOutputLabel}`,
+      )
+    }
+
+    if (i < clipPaths.length - 2) {
+      currentOffset = currentOffset + durations[i + 1] - transitionDuration
+    }
+  }
+
+  const allFilters = [...videoFilters, ...audioFilters]
+  const complexFilter = allFilters.join(';')
+
+  const cmd = ffmpeg()
+
+  for (const p of clipPaths) {
+    cmd.input(p)
+  }
+
+  cmd.complexFilter(complexFilter)
+  cmd.outputOptions(['-map', '[vout]'])
+
+  if (anyHasAudio) {
+    cmd.outputOptions(['-map', '[aout]'])
+  }
+
+  cmd.outputOptions([
+    '-c:v', 'libx264',
+    '-preset', 'fast',
+    '-crf', '23',
+    '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart',
+    '-threads', '4',
+  ])
+
+  if (anyHasAudio) {
+    cmd.audioCodec('aac').audioFrequency(44100).audioChannels(2)
+  } else {
+    cmd.noAudio()
+  }
+
+  cmd.output(outputPath)
+
+  try {
+    await runCommand(cmd)
+  } catch (err) {
+    // 转场失败时降级为普通合并
+    console.warn(`[FFmpeg] 转场合并失败，降级为普通合并: ${(err as Error).message}`)
+    return mergeClips(clipPaths, outputPath)
+  }
+
+  if (!existsSync(outputPath)) {
+    throw new Error('转场合并完成但输出文件不存在')
+  }
+
+  return outputPath
+}
+
+// ==========================================
+// 音频混合（BGM + 原始音频）
+// ==========================================
+
+/**
+ * 将视频与 BGM 混合
+ * @param videoPath 视频文件路径
+ * @param bgmPath BGM 文件路径
+ * @param outputPath 输出文件路径
+ * @param options 混音选项
+ */
+export async function mixAudioStreams(
+  videoPath: string,
+  bgmPath: string,
+  outputPath: string,
+  options: AudioMixOptions,
+): Promise<string> {
+  if (!existsSync(videoPath)) {
+    throw new Error(`视频文件不存在: ${videoPath}`)
+  }
+  if (!existsSync(bgmPath)) {
+    throw new Error(`BGM 文件不存在: ${bgmPath}`)
+  }
+
+  safeUnlink(outputPath)
+
+  // 检查视频是否有音频流
+  const probeData = await probeVideo(videoPath)
+  const hasVideoAudio = probeData.streams.some(s => s.codec_type === 'audio')
+  const videoDuration = probeData.format.duration ?? 0
+
+  const cmd = ffmpeg()
+
+  // BGM 输入（如果需要循环）
+  if (options.bgmLoop) {
+    cmd.inputOptions(['-stream_loop', '-1'])
+  }
+  cmd.input(bgmPath)
+
+  // 视频输入
+  cmd.input(videoPath)
+
+  if (options.mode === 'bgm_only' || !hasVideoAudio) {
+    // 仅 BGM 模式（或视频无音频流时自动切换）
+    const fadeInOpt = options.bgmFadeIn > 0 ? `afade=t=in:st=0:d=${options.bgmFadeIn}` : ''
+    const fadeOutOpt = options.bgmFadeOut > 0 ? `afade=t=out:st=${Math.max(0, videoDuration - options.bgmFadeOut)}:d=${options.bgmFadeOut}` : ''
+    const volumeOpt = `volume=${options.bgmVolume}`
+
+    const bgmFilters = [volumeOpt, fadeInOpt, fadeOutOpt].filter(Boolean).join(',')
+
+    cmd.outputOptions([
+      '-map', '1:v',
+      '-map', '0:a',
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-shortest',
+    ])
+
+    if (bgmFilters) {
+      cmd.audioFilters(bgmFilters)
+    }
+  } else if (options.mode === 'mixed') {
+    // 混合模式
+    const fadeInOpt = options.bgmFadeIn > 0 ? `afade=t=in:st=0:d=${options.bgmFadeIn}` : ''
+    const fadeOutOpt = options.bgmFadeOut > 0 ? `afade=t=out:st=${Math.max(0, videoDuration - options.bgmFadeOut)}:d=${options.bgmFadeOut}` : ''
+
+    const bgmFilterParts = [`volume=${options.bgmVolume}`]
+    if (fadeInOpt) bgmFilterParts.push(fadeInOpt)
+    if (fadeOutOpt) bgmFilterParts.push(fadeOutOpt)
+
+    const filterParts = [
+      `[0:a]${bgmFilterParts.join(',')}[bgm]`,
+      `[1:a]volume=${options.originalVolume}[orig]`,
+      `[bgm][orig]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
+    ]
+
+    cmd.complexFilter(filterParts.join(';'))
+    cmd.outputOptions([
+      '-map', '1:v',
+      '-map', '[aout]',
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-shortest',
+    ])
+  }
+
+  cmd.output(outputPath)
+
+  try {
+    await runCommand(cmd)
+  } catch (err) {
+    console.warn(`[FFmpeg] 音频混合失败，保持原始音频: ${(err as Error).message}`)
+    copyFileSync(videoPath, outputPath)
+  }
+
+  if (!existsSync(outputPath)) {
+    throw new Error('音频混合完成但输出文件不存在')
   }
 
   return outputPath

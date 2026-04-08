@@ -22,6 +22,7 @@ import {
   StopCircle,
   // ExternalLink,   // 一键发布暂不可用
   FolderOpen,
+  Music,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -32,7 +33,7 @@ import { PublishModal } from '../components/PublishModal'
 import { useProjectStore } from '../stores/projectStore'
 import type { Project, ProjectStatus, ProcessingStep, Clip, UploadPlatform, UploadProgress, UploadRecord } from '@shared/types'
 import type { PipelineProgress } from '@shared/pipeline'
-import { MODEL_LABEL_MAP, ANALYSIS_MODE_LABEL_MAP } from '@shared/constants'
+import { MODEL_LABEL_MAP, ANALYSIS_MODE_LABEL_MAP, AUDIO_MODE_LABEL_MAP, BEAT_SYNC_MODE_LABEL_MAP, TRANSITION_TYPE_LABEL_MAP } from '@shared/constants'
 import { PLATFORM_CONFIGS } from '@shared/platform'
 
 /** 处理步骤列表 */
@@ -42,9 +43,11 @@ const PROCESSING_STEPS: { key: ProcessingStep; label: string }[] = [
   { key: 'extracting', label: '音频提取' },
   { key: 'transcribing', label: '语音转录' },
   { key: 'extracting_frames', label: '关键帧抽取' },
+  { key: 'detecting_beats', label: '节拍分析' },
   { key: 'analyzing', label: 'AI 分析' },
   { key: 'clipping', label: '视频剪辑' },
   { key: 'embedding_subs', label: '字幕嵌入' },
+  { key: 'mixing_audio', label: '音频混音' },
 ]
 
 /** 步骤图标 */
@@ -361,6 +364,37 @@ export default function ProjectDetail() {
                 {project.prompt}
               </p>
             </div>
+          )}
+          {project.bgmTrackId && (
+            <>
+              <div>
+                <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  <Music className="mr-1 inline h-3 w-3" />
+                  背景音乐
+                </span>
+                <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>
+                  {AUDIO_MODE_LABEL_MAP[project.audioMode] ?? project.audioMode}
+                </p>
+              </div>
+              <div>
+                <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  节拍同步
+                </span>
+                <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>
+                  {BEAT_SYNC_MODE_LABEL_MAP[project.beatSyncMode] ?? project.beatSyncMode}
+                </p>
+              </div>
+              {project.transitionType && project.transitionType !== 'none' && (
+                <div>
+                  <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    转场效果
+                  </span>
+                  <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>
+                    {TRANSITION_TYPE_LABEL_MAP[project.transitionType]} ({project.transitionDuration}s)
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </Card>

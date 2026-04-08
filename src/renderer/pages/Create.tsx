@@ -16,12 +16,15 @@ import {
   Trash2,
   FileText,
   Subtitles,
+  Music,
+  Shuffle,
+  Volume2,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Select } from '../components/ui/Select'
 import { useSettingsStore } from '../stores/settingsStore'
-import type { GLMModel, AnalysisMode, PromptTemplate } from '@shared/types'
-import { MODEL_OPTIONS, ANALYSIS_MODE_OPTIONS } from '@shared/constants'
+import type { GLMModel, AnalysisMode, PromptTemplate, AudioMode, TransitionType, BeatSyncMode, BGMTrack } from '@shared/types'
+import { MODEL_OPTIONS, ANALYSIS_MODE_OPTIONS, AUDIO_MODE_OPTIONS, BEAT_SYNC_MODE_OPTIONS, TRANSITION_TYPE_OPTIONS } from '@shared/constants'
 
 
 export default function Create() {
@@ -40,6 +43,17 @@ export default function Create() {
   const [creating, setCreating] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
 
+  // BGM 相关状态
+  const [showBgmOptions, setShowBgmOptions] = useState(false)
+  const [bgmTracks, setBgmTracks] = useState<BGMTrack[]>([])
+  const [selectedBgmTrackId, setSelectedBgmTrackId] = useState<string | null>(null)
+  const [audioMode, setAudioMode] = useState<AudioMode>('mixed')
+  const [bgmVolume, setBgmVolume] = useState(30)
+  const [originalAudioVolume, setOriginalAudioVolume] = useState(100)
+  const [beatSyncMode, setBeatSyncMode] = useState<BeatSyncMode>('none')
+  const [transitionType, setTransitionType] = useState<TransitionType>('none')
+  const [transitionDuration, setTransitionDuration] = useState(0.5)
+
   // 模板数据
   const [templates, setTemplates] = useState<PromptTemplate[]>([])
 
@@ -47,6 +61,13 @@ export default function Create() {
   useEffect(() => {
     window.electronAPI.listTemplates().then(setTemplates).catch(() => {
       // 静默处理，不影响用户操作
+    })
+  }, [])
+
+  /** 加载 BGM 曲目列表 */
+  useEffect(() => {
+    window.electronAPI.listBgmTracks().then(setBgmTracks).catch(() => {
+      // 静默处理
     })
   }, [])
 
@@ -103,6 +124,15 @@ export default function Create() {
     setShowTemplates(false)
   }
 
+  /** 随机选择 BGM */
+  const handleRandomBgm = () => {
+    if (bgmTracks.length === 0) return
+    const available = bgmTracks.filter(t => t.id !== selectedBgmTrackId)
+    if (available.length === 0) return
+    const random = available[Math.floor(Math.random() * available.length)]
+    setSelectedBgmTrackId(random.id)
+  }
+
   /** 创建项目并开始处理 */
   const handleStart = async () => {
     if (videoPaths.length === 0) {
@@ -140,6 +170,13 @@ export default function Create() {
         model,
         analysisMode,
         needsSubtitles,
+        bgmTrackId: showBgmOptions ? selectedBgmTrackId : null,
+        audioMode: showBgmOptions ? audioMode : 'original',
+        bgmVolume: bgmVolume / 100,
+        originalAudioVolume: originalAudioVolume / 100,
+        transitionType: showBgmOptions ? transitionType : 'none',
+        transitionDuration,
+        beatSyncMode: showBgmOptions ? beatSyncMode : 'none',
       })
 
       toast.success('项目创建成功，正在启动处理...')
@@ -375,6 +412,174 @@ export default function Create() {
         </label>
       </motion.div>
 
+      {/* 背景音乐 & 节拍同步 */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.19 }}
+        className="glass-card mb-6 p-6"
+      >
+        <label className="flex cursor-pointer items-center gap-3">
+          <div className="relative flex h-5 w-9 shrink-0">
+            <input
+              type="checkbox"
+              className="peer sr-only"
+              checked={showBgmOptions}
+              onChange={(e) => setShowBgmOptions(e.target.checked)}
+            />
+            <div
+              className="h-5 w-9 rounded-full transition-colors duration-200"
+              style={{ background: showBgmOptions ? 'var(--color-primary)' : 'var(--border-active)' }}
+            />
+            <div
+              className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform duration-200 ${showBgmOptions ? 'translate-x-4' : ''}`}
+            />
+          </div>
+          <span
+            className="text-sm font-medium"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            <Music className="mr-1.5 inline h-4 w-4 text-primary-400" />
+            背景音乐
+          </span>
+          <span
+            className="text-xs"
+            style={{ color: "var(--text-tertiary)" }}
+          >
+            添加背景音乐，支持节拍卡点和转场效果
+          </span>
+        </label>
+
+        {showBgmOptions && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="mt-4 space-y-4"
+          >
+            {/* BGM 曲目选择 */}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium" style={{ color: "var(--text-tertiary)" }}>
+                  选择背景音乐
+                </span>
+                <Button variant="ghost" size="sm" onClick={handleRandomBgm} disabled={bgmTracks.length === 0}>
+                  <Shuffle className="h-3 w-3" />
+                  随机选择
+                </Button>
+              </div>
+              {bgmTracks.length === 0 ? (
+                <div
+                  className="rounded-lg border p-4 text-center text-xs"
+                  style={{ color: "var(--text-tertiary)", borderColor: "var(--border-color)" }}
+                >
+                  暂无背景音乐，请在应用资源目录中添加 BGM 文件
+                </div>
+              ) : (
+                <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+                  {bgmTracks.map((track) => (
+                    <button
+                      key={track.id}
+                      onClick={() => setSelectedBgmTrackId(track.id === selectedBgmTrackId ? null : track.id)}
+                      className="shrink-0 rounded-lg border px-3 py-2 text-left transition-all duration-200"
+                      style={{
+                        borderColor: track.id === selectedBgmTrackId ? 'var(--color-primary)' : 'var(--border-color)',
+                        background: track.id === selectedBgmTrackId
+                          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1))'
+                          : 'transparent',
+                      }}
+                    >
+                      <p className="text-xs font-medium truncate max-w-[120px]" style={{ color: "var(--text-primary)" }}>
+                        {track.name}
+                      </p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+                        {Math.floor(track.duration / 60)}:{String(Math.floor(track.duration % 60)).padStart(2, '0')} · {track.bpm} BPM
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 音频模式 + 节拍同步 */}
+            <div className="grid grid-cols-2 gap-3">
+              <Select
+                label="音频模式"
+                value={audioMode}
+                onChange={(v) => setAudioMode(v as AudioMode)}
+                options={AUDIO_MODE_OPTIONS}
+              />
+              <Select
+                label="节拍同步"
+                value={beatSyncMode}
+                onChange={(v) => setBeatSyncMode(v as BeatSyncMode)}
+                options={BEAT_SYNC_MODE_OPTIONS}
+              />
+            </div>
+
+            {/* 音量控制（混合模式时显示） */}
+            {audioMode === 'mixed' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="mb-1 flex items-center gap-1.5">
+                    <Volume2 className="h-3 w-3" style={{ color: "var(--text-tertiary)" }} />
+                    <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>BGM 音量 {bgmVolume}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={bgmVolume}
+                    onChange={(e) => setBgmVolume(Number(e.target.value))}
+                    className="w-full accent-primary-500"
+                  />
+                </div>
+                <div>
+                  <div className="mb-1 flex items-center gap-1.5">
+                    <Volume2 className="h-3 w-3" style={{ color: "var(--text-tertiary)" }} />
+                    <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>原声音量 {originalAudioVolume}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={originalAudioVolume}
+                    onChange={(e) => setOriginalAudioVolume(Number(e.target.value))}
+                    className="w-full accent-primary-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 转场效果 */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <Select
+                  label="转场效果"
+                  value={transitionType}
+                  onChange={(v) => setTransitionType(v as TransitionType)}
+                  options={TRANSITION_TYPE_OPTIONS}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  转场时长（秒）
+                </label>
+                <input
+                  type="number"
+                  min={0.1}
+                  max={3.0}
+                  step={0.1}
+                  value={transitionDuration}
+                  onChange={(e) => setTransitionDuration(Number(e.target.value))}
+                  className="input-glow w-full text-sm"
+                  disabled={transitionType === 'none'}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
+
       {/* Prompt 输入区 */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -509,6 +714,15 @@ export default function Create() {
             {ANALYSIS_MODE_OPTIONS.find((m) => m.value === analysisMode)?.label}
             模式
           </span>
+          {showBgmOptions && selectedBgmTrackId && (
+            <>
+              <span style={{ color: "var(--border-color)" }}>|</span>
+              <span className="flex items-center gap-1.5">
+                <Music className="h-3.5 w-3.5 text-primary-400" />
+                {bgmTracks.find((t) => t.id === selectedBgmTrackId)?.name || 'BGM'}
+              </span>
+            </>
+          )}
         </div>
         <Button
           glow

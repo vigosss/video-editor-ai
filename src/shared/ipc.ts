@@ -56,6 +56,11 @@ export const IPC_CHANNELS = {
   GLM_VALIDATE_KEY: 'glm:validateKey',
   GLM_PROGRESS: 'glm:progress',
 
+  // BGM 背景音乐
+  BGM_LIST_TRACKS: 'bgm:listTracks',
+  BGM_GET_TRACK_PATH: 'bgm:getTrackPath',
+  BGM_ANALYZE_BEATS: 'bgm:analyzeBeats',
+
   // 对话框
   DIALOG_OPEN_FILE: 'dialog:openFile',
   DIALOG_OPEN_FILES: 'dialog:openFiles',

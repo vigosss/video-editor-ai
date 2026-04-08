@@ -9,6 +9,7 @@ import type { UploadRecord, UploadPlatform, UploadStatus } from '../../shared/up
 import type { OAuthToken, PlatformAuthStatus } from '../../shared/platform'
 import type { AppSettings } from '../../shared/settings'
 import type { PromptTemplate } from '../../shared/prompt'
+import type { AudioMode, TransitionType, BeatSyncMode } from '../../shared/bgm'
 
 // ==========================================
 // 数据库服务 — 单例模式
@@ -132,6 +133,35 @@ function runMigrations(database: Database.Database): void {
     database.exec(`ALTER TABLE projects ADD COLUMN needs_subtitles INTEGER NOT NULL DEFAULT 0`)
     console.log('[database] 迁移: 添加 needs_subtitles 列')
   }
+
+  // 迁移：为 projects 表添加 BGM 相关列
+  const bgmColumns = [
+    { name: 'bgm_track_id', sql: 'ALTER TABLE projects ADD COLUMN bgm_track_id TEXT DEFAULT NULL' },
+    { name: 'audio_mode', sql: `ALTER TABLE projects ADD COLUMN audio_mode TEXT NOT NULL DEFAULT 'original'` },
+    { name: 'bgm_volume', sql: 'ALTER TABLE projects ADD COLUMN bgm_volume REAL NOT NULL DEFAULT 0.3' },
+    { name: 'original_audio_volume', sql: 'ALTER TABLE projects ADD COLUMN original_audio_volume REAL NOT NULL DEFAULT 1.0' },
+    { name: 'transition_type', sql: `ALTER TABLE projects ADD COLUMN transition_type TEXT NOT NULL DEFAULT 'none'` },
+    { name: 'transition_duration', sql: 'ALTER TABLE projects ADD COLUMN transition_duration REAL NOT NULL DEFAULT 0.5' },
+    { name: 'beat_sync_mode', sql: `ALTER TABLE projects ADD COLUMN beat_sync_mode TEXT NOT NULL DEFAULT 'none'` },
+  ]
+
+  for (const col of bgmColumns) {
+    if (!columns.some(c => c.name === col.name)) {
+      database.exec(col.sql)
+      console.log(`[database] 迁移: 添加 ${col.name} 列`)
+    }
+  }
+
+  // 创建节拍缓存表
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS bgm_beat_cache (
+      bgm_track_id TEXT PRIMARY KEY,
+      beat_data TEXT NOT NULL,
+      bpm REAL NOT NULL,
+      confidence REAL NOT NULL,
+      analyzed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
 }
 
 // ==========================================
@@ -146,11 +176,17 @@ export function createProject(params: CreateProjectParams): Project {
   const videoPath = params.videoPaths[0]  // 初始工作视频路径
 
   const stmt = database.prepare(`
-    INSERT INTO projects (id, name, video_path, video_paths, output_path, prompt, model, analysis_mode, needs_subtitles, status, progress, current_step, error_message, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, 'idle', NULL, ?)
+    INSERT INTO projects (id, name, video_path, video_paths, output_path, prompt, model, analysis_mode, needs_subtitles,
+      bgm_track_id, audio_mode, bgm_volume, original_audio_volume, transition_type, transition_duration, beat_sync_mode,
+      status, progress, current_step, error_message, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, 'idle', NULL, ?)
   `)
 
-  stmt.run(id, params.name, videoPath, JSON.stringify(params.videoPaths), params.outputPath, params.prompt, params.model, params.analysisMode, params.needsSubtitles ? 1 : 0, now)
+  stmt.run(
+    id, params.name, videoPath, JSON.stringify(params.videoPaths), params.outputPath, params.prompt, params.model, params.analysisMode, params.needsSubtitles ? 1 : 0,
+    params.bgmTrackId ?? null, params.audioMode ?? 'original', params.bgmVolume ?? 0.3, params.originalAudioVolume ?? 1.0, params.transitionType ?? 'none', params.transitionDuration ?? 0.5, params.beatSyncMode ?? 'none',
+    now,
+  )
 
   return {
     id,
@@ -162,6 +198,13 @@ export function createProject(params: CreateProjectParams): Project {
     model: params.model,
     analysisMode: params.analysisMode,
     needsSubtitles: params.needsSubtitles,
+    bgmTrackId: params.bgmTrackId ?? null,
+    audioMode: (params.audioMode ?? 'original') as AudioMode,
+    bgmVolume: params.bgmVolume ?? 0.3,
+    originalAudioVolume: params.originalAudioVolume ?? 1.0,
+    transitionType: (params.transitionType ?? 'none') as TransitionType,
+    transitionDuration: params.transitionDuration ?? 0.5,
+    beatSyncMode: (params.beatSyncMode ?? 'none') as BeatSyncMode,
     status: 'pending',
     progress: 0,
     currentStep: 'idle',
@@ -199,7 +242,9 @@ export function updateProject(id: string, data: Partial<Project>): Project {
     UPDATE projects SET
       name = ?, video_path = ?, video_paths = ?, output_path = ?, prompt = ?,
       model = ?, analysis_mode = ?, status = ?, progress = ?,
-      current_step = ?, error_message = ?, completed_at = ?
+      current_step = ?, error_message = ?, completed_at = ?,
+      bgm_track_id = ?, audio_mode = ?, bgm_volume = ?, original_audio_volume = ?,
+      transition_type = ?, transition_duration = ?, beat_sync_mode = ?
     WHERE id = ?
   `)
 
@@ -216,6 +261,13 @@ export function updateProject(id: string, data: Partial<Project>): Project {
     merged.currentStep,
     merged.errorMessage,
     merged.completedAt,
+    merged.bgmTrackId ?? null,
+    merged.audioMode ?? 'original',
+    merged.bgmVolume ?? 0.3,
+    merged.originalAudioVolume ?? 1.0,
+    merged.transitionType ?? 'none',
+    merged.transitionDuration ?? 0.5,
+    merged.beatSyncMode ?? 'none',
     id,
   )
 
@@ -515,6 +567,13 @@ interface RawProjectRow {
   model: string
   analysis_mode: string
   needs_subtitles: number
+  bgm_track_id: string | null
+  audio_mode: string
+  bgm_volume: number
+  original_audio_volume: number
+  transition_type: string
+  transition_duration: number
+  beat_sync_mode: string
   status: string
   progress: number
   current_step: string
@@ -557,6 +616,13 @@ function rowToProject(row: RawProjectRow): Project {
     model: row.model as Project['model'],
     analysisMode: row.analysis_mode as Project['analysisMode'],
     needsSubtitles: row.needs_subtitles === 1,
+    bgmTrackId: row.bgm_track_id ?? null,
+    audioMode: (row.audio_mode || 'original') as Project['audioMode'],
+    bgmVolume: row.bgm_volume ?? 0.3,
+    originalAudioVolume: row.original_audio_volume ?? 1.0,
+    transitionType: (row.transition_type || 'none') as Project['transitionType'],
+    transitionDuration: row.transition_duration ?? 0.5,
+    beatSyncMode: (row.beat_sync_mode || 'none') as Project['beatSyncMode'],
     status: row.status as ProjectStatus,
     progress: row.progress,
     currentStep: row.current_step as ProcessingStep,

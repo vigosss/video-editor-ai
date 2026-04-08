@@ -78,6 +78,11 @@ const api: ElectronAPI = {
     return () => ipcRenderer.removeListener('glm:progress', handler)
   },
 
+  // BGM 背景音乐
+  listBgmTracks: () => ipcRenderer.invoke('bgm:listTracks'),
+  getBgmTrackPath: (trackId) => ipcRenderer.invoke('bgm:getTrackPath', trackId),
+  analyzeBgmBeats: (trackId) => ipcRenderer.invoke('bgm:analyzeBeats', trackId),
+
   // 对话框
   openFileDialog: (filters) => ipcRenderer.invoke('dialog:openFile', filters),
   openFilesDialog: (filters) => ipcRenderer.invoke('dialog:openFiles', filters),

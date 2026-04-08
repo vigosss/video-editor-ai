@@ -7,6 +7,7 @@ import { readFile } from 'fs/promises'
 import { getAllSettings } from './database'
 import { GLM_MODEL_ID_MAP, DEFAULT_SYSTEM_PROMPT } from '../../shared/constants'
 import type { GLMModel, AnalysisMode } from '../../shared/project'
+import type { BeatSyncMode } from '../../shared/bgm'
 
 // ==========================================
 // 类型定义
@@ -388,6 +389,8 @@ function buildMessages(
   subtitleText: string,
   userPrompt: string,
   systemPrompt: string,
+  beatTimestamps?: number[],
+  beatSyncMode?: BeatSyncMode,
 ): Array<Record<string, unknown>> {
   const systemMessage = {
     role: 'system',
@@ -414,6 +417,15 @@ function buildMessages(
     })
   }
 
+  // 添加节拍信息（如果启用节拍同步）
+  if (beatTimestamps && beatTimestamps.length > 0 && beatSyncMode) {
+    const beatInfoText = buildBeatPrompt(beatTimestamps, beatSyncMode)
+    userContent.push({
+      type: 'text',
+      text: beatInfoText,
+    })
+  }
+
   // 添加用户 Prompt
   userContent.push({
     type: 'text',
@@ -426,6 +438,43 @@ function buildMessages(
   }
 
   return [systemMessage, userMessage]
+}
+
+/** 根据节拍同步模式构建提示文本 */
+function buildBeatPrompt(beatTimestamps: number[], mode: BeatSyncMode): string {
+  // 限制显示的节拍数量，避免 prompt 过长
+  const maxBeats = 200
+  const beats = beatTimestamps.length > maxBeats
+    ? beatTimestamps.filter((_, i) => i % Math.ceil(beatTimestamps.length / maxBeats) === 0)
+    : beatTimestamps
+
+  const beatsStr = beats.map(t => t.toFixed(2)).join(', ')
+
+  if (mode === 'ai_with_beats') {
+    return `以下是背景音乐的节拍时间点（单位：秒）：
+[${beatsStr}]
+
+请根据这些节拍点来规划剪辑片段：
+1. 每个片段的 startTime 和 endTime 尽量落在某个节拍时间点上（误差不超过 0.3 秒）
+2. 片段之间的切换位置应卡在节拍点上，增强视频节奏感
+3. 保持画面内容连贯性的同时，让视频切换与音乐节奏同步
+4. 片段时长可以根据音乐节奏灵活调整，不必使用全部原始素材时长
+5. 在保证内容质量的前提下，可以让节奏更紧凑、更有动感`
+  }
+
+  if (mode === 'beat_segment') {
+    return `以下是背景音乐的节拍时间点（单位：秒）：
+[${beatsStr}]
+
+我已经将视频按节拍分成了若干段落（通常每 4 个节拍为一段）。请评估每个段落的画面质量，并推荐保留哪些段落来组成最佳的视频：
+1. 挑选出画面质量最好、内容最有价值的段落
+2. 保留的段落总时长应适合短视频（建议 30 秒到 3 分钟）
+3. 段落之间可以按节拍节奏调整，不必完全连续
+4. 每个片段的 startTime 和 endTime 应与节拍时间点对齐`
+  }
+
+  // ai_then_align 不需要在这里处理
+  return ''
 }
 
 // ==========================================
@@ -441,6 +490,8 @@ export interface AnalyzeVideoOptions {
   analysisMode: AnalysisMode
   systemPrompt?: string
   apiKey?: string
+  beatTimestamps?: number[]
+  beatSyncMode?: BeatSyncMode
 }
 
 /**
@@ -484,7 +535,7 @@ export async function analyzeVideo(
 
   // 步骤2: 构造请求消息
   onProgress?.(30, '正在构造分析请求...')
-  const messages = buildMessages(base64Images, subtitleText, userPrompt, systemPrompt)
+  const messages = buildMessages(base64Images, subtitleText, userPrompt, systemPrompt, options.beatTimestamps, options.beatSyncMode)
 
   // 步骤3: 调用 API（带重试）
   onProgress?.(35, `正在调用 ${model} 进行分析，请稍候...`)

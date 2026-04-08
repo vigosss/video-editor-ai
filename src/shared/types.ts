@@ -34,6 +34,16 @@ export type {
 // Prompt 模板
 export type { PromptTemplate } from './prompt'
 
+// BGM 背景音乐
+export type {
+  AudioMode,
+  TransitionType,
+  BeatSyncMode,
+  BGMTrack,
+  BeatInfo,
+  AudioMixOptions,
+} from './bgm'
+
 // 视频信息
 export type { VideoInfo } from './video'
 

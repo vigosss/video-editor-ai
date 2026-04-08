@@ -11,6 +11,7 @@ import type { UploadRecord, UploadPlatform, PublishParams, UploadProgress } from
 import type { PlatformAuthStatus } from './platform'
 import type { PromptTemplate } from './prompt'
 import type { GLMModel, AnalysisMode } from './project'
+import type { BGMTrack, BeatInfo } from './bgm'
 
 /** 文件过滤器 */
 export interface FileFilter {
@@ -126,6 +127,11 @@ export interface ElectronAPI {
   }>
   glmValidateKey: (apiKey: string) => Promise<{ success: boolean; data: boolean }>
   onGlmProgress: (callback: (progress: { progress: number; message: string }) => void) => () => void
+
+  // BGM 背景音乐
+  listBgmTracks: () => Promise<BGMTrack[]>
+  getBgmTrackPath: (trackId: string) => Promise<string>
+  analyzeBgmBeats: (trackId: string) => Promise<BeatInfo>
 
   // 对话框
   openFileDialog: (filters?: FileFilter[]) => Promise<string | null>

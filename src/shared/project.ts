@@ -2,6 +2,8 @@
 // 项目相关类型定义
 // ==========================================
 
+import type { AudioMode, TransitionType, BeatSyncMode } from './bgm'
+
 /** 项目状态 */
 export type ProjectStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
@@ -23,9 +25,11 @@ export type ProcessingStep =
   | 'extracting'     // 音频提取
   | 'transcribing'   // 语音转录（Whisper）
   | 'extracting_frames' // 关键帧抽取
+  | 'detecting_beats' // 节拍检测（BGM）
   | 'analyzing'      // AI 分析（GLM）
   | 'clipping'       // 剪辑视频
   | 'embedding_subs' // 嵌入字幕
+  | 'mixing_audio'   // 音频混音（BGM）
   | 'completed'      // 完成
   | 'failed'         // 失败
 
@@ -40,6 +44,13 @@ export interface Project {
   model: GLMModel
   analysisMode: AnalysisMode
   needsSubtitles: boolean  // 是否需要字幕
+  bgmTrackId: string | null          // BGM 曲目 ID
+  audioMode: AudioMode               // 音频处理模式
+  bgmVolume: number                  // BGM 音量 0.0-1.0
+  originalAudioVolume: number        // 原始音频音量 0.0-1.0
+  transitionType: TransitionType     // 转场效果类型
+  transitionDuration: number         // 转场时长（秒）
+  beatSyncMode: BeatSyncMode         // 节拍同步模式
   status: ProjectStatus
   progress: number        // 0-100
   currentStep: ProcessingStep
@@ -57,4 +68,11 @@ export interface CreateProjectParams {
   model: GLMModel
   analysisMode: AnalysisMode
   needsSubtitles: boolean  // 是否需要字幕
+  bgmTrackId?: string | null
+  audioMode?: AudioMode
+  bgmVolume?: number
+  originalAudioVolume?: number
+  transitionType?: TransitionType
+  transitionDuration?: number
+  beatSyncMode?: BeatSyncMode
 }
