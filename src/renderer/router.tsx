@@ -3,8 +3,8 @@ import { MainLayout } from './components/layout/MainLayout'
 import { lazy, Suspense } from 'react'
 
 // 懒加载页面组件
-const Landing = lazy(() => import('./pages/Landing'))
 const Home = lazy(() => import('./pages/Home'))
+const Create = lazy(() => import('./pages/Create'))
 const Projects = lazy(() => import('./pages/Projects'))
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -29,7 +29,7 @@ export const routes: RouteObject[] = [
         index: true,
         element: (
           <Suspense fallback={<PageLoading />}>
-            <Landing />
+            <Home />
           </Suspense>
         ),
       },
@@ -37,7 +37,7 @@ export const routes: RouteObject[] = [
         path: 'create',
         element: (
           <Suspense fallback={<PageLoading />}>
-            <Home />
+            <Create />
           </Suspense>
         ),
       },
