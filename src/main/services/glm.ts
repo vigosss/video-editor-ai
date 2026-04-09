@@ -5,7 +5,7 @@
 import { existsSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { getAllSettings } from './database'
-import { GLM_MODEL_ID_MAP, DEFAULT_SYSTEM_PROMPT } from '../../shared/constants'
+import { GLM_MODEL_ID_MAP, DEFAULT_SYSTEM_PROMPT, MODEL_LABEL_MAP } from '../../shared/constants'
 import type { GLMModel, AnalysisMode } from '../../shared/project'
 import type { BeatSyncMode } from '../../shared/bgm'
 
@@ -538,7 +538,7 @@ export async function analyzeVideo(
   const messages = buildMessages(base64Images, subtitleText, userPrompt, systemPrompt, options.beatTimestamps, options.beatSyncMode)
 
   // 步骤3: 调用 API（带重试）
-  onProgress?.(35, `正在调用 ${model} 进行分析，请稍候...`)
+  onProgress?.(35, `正在调用 ${MODEL_LABEL_MAP[model]} 进行分析，请稍候...`);
 
   const result = await callWithRetry(apiKey, modelId, messages, (attempt, error) => {
     onProgress?.(35, `分析请求失败，第 ${attempt} 次重试中... (${error.message})`)
