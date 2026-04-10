@@ -696,6 +696,15 @@ export async function mergeClipsWithTransitions(
     durations.push(info.duration)
   }
 
+  // 校验片段时长：每个片段必须大于转场时长
+  for (let i = 0; i < durations.length; i++) {
+    if (durations[i] <= transitionDuration) {
+      throw new Error(
+        `片段 ${i + 1} 的时长 (${durations[i].toFixed(2)}s) 必须大于转场时长 (${transitionDuration}s)`
+      )
+    }
+  }
+
   // 构建 xfade 滤镜链
   const videoFilters: string[] = []
   const audioFilters: string[] = []
@@ -709,13 +718,16 @@ export async function mergeClipsWithTransitions(
   const allHaveAudio = hasAudioStreams.every(a => a)
   let audioIdx = 0
 
-  // 计算 xfade offset（确保非负）
-  let currentOffset = Math.max(0, durations[0] - transitionDuration - 0.01)
+  // 跟踪当前输出流的累积长度
+  let accumulatedDuration = durations[0]
 
   for (let i = 0; i < clipPaths.length - 1; i++) {
     const inputLabel1 = i === 0 ? '[0:v]' : `[v${i - 1}]`
     const inputLabel2 = `[${i + 1}:v]`
     const outputLabel = i === clipPaths.length - 2 ? '[vout]' : `[v${i}]`
+
+    // 当前转场的 offset = 累积长度 - 转场时长
+    const currentOffset = accumulatedDuration - transitionDuration
 
     videoFilters.push(
       `${inputLabel1}${inputLabel2}xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${currentOffset.toFixed(3)}${outputLabel}`,
@@ -732,15 +744,21 @@ export async function mergeClipsWithTransitions(
       audioIdx++
     }
 
-    if (i < clipPaths.length - 2) {
-      currentOffset = Math.max(0, currentOffset + durations[i + 1] - transitionDuration - 0.01)
-    }
+    // 更新累积长度：加上下一个片段的长度，减去转场重叠部分
+    accumulatedDuration += durations[i + 1] - transitionDuration
   }
 
   const allFilters = [...videoFilters, ...audioFilters]
   const complexFilter = allFilters.join(';')
 
-  console.log('[FFmpeg] 转场合并参数:', { transitionType, transitionDuration, clipCount: clipPaths.length, durations })
+  console.log('[FFmpeg] 转场合并参数:', {
+    transitionType,
+    transitionDuration,
+    clipCount: clipPaths.length,
+    durations,
+    totalDuration: durations.reduce((sum, d) => sum + d, 0).toFixed(2) + 's',
+    outputDuration: (durations.reduce((sum, d) => sum + d, 0) - transitionDuration * (clipPaths.length - 1)).toFixed(2) + 's',
+  })
   console.log('[FFmpeg] filter_complex:', complexFilter)
 
   const cmd = ffmpeg()
