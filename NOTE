@@ -11,3 +11,16 @@
 [FFmpeg] filter_complex: [0:v][1:v]xfade=transition=fade:duration=0.5:offset=4.840[v0];[v0][2:v]xfade=transition=fade:duration=0.5:offset=8.360[v1];[v1][3:v]xfade=transition=fade:duration=0.5:offset=11.190[v2];[v2][4:v]xfade=transition=fade:duration=0.5:offset=20.050[v3];[v3][5:v]xfade=transition=fade:duration=0.5:offset=25.550[v4];[v4][6:v]xfade=transition=fade:duration=0.5:offset=32.390[v5];[v5][7:v]xfade=transition=fade:duration=0.5:offset=38.580[v6];[v6][8:v]xfade=transition=fade:duration=0.5:offset=44.090[vout];[0:a][1:a]acrossfade=d=0.5:c1=tri:c2=tri[a0];[a0][2:a]acrossfade=d=0.5:c1=tri:c2=tri[a1];[a1][3:a]acrossfade=d=0.5:c1=tri:c2=tri[a2];[a2][4:a]acrossfade=d=0.5:c1=tri:c2=tri[a3];[a3][5:a]acrossfade=d=0.5:c1=tri:c2=tri[a4];[a4][6:a]acrossfade=d=0.5:c1=tri:c2=tri[a5];[a5][7:a]acrossfade=d=0.5:c1=tri:c2=tri[a6];[a6][8:a]acrossfade=d=0.5:c1=tri:c2=tri[aout]
 [FFmpeg] 转场合并失败，降级为普通合并: FFmpeg 处理失败: ffmpeg exited with code 1: Error initializing complex filters.
 Invalid argument
+
+[Pipeline] [视频剪辑] 60% (总体 85%) - 已剪辑 2 个片段，正在合并...
+[FFmpeg] 转场合并参数: {
+  transitionType: 'fade',
+  transitionDuration: 0.5,
+  clipCount: 2,
+  durations: [ 42.81, 28.97 ],
+  totalDuration: '71.78s',
+  outputDuration: '71.28s'
+}
+[FFmpeg] filter_complex: [0:v][1:v]xfade=transition=fade:duration=0.5:offset=42.310[vout];[0:a][1:a]acrossfade=d=0.5:c1=tri:c2=tri[aout]
+[FFmpeg] 转场合并失败，降级为普通合并: FFmpeg 处理失败: ffmpeg exited with code 1: Error initializing complex filters.
+Invalid argument
