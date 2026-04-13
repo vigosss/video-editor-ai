@@ -534,6 +534,53 @@ export function getProjectWorkDir(projectId: string): string {
 // ==========================================
 
 /**
+ * 分析多个视频，自动选出最合适的目标分辨率
+ * 统计横屏/竖屏数量，少数服从多数；平票时用第一个视频的实际尺寸
+ */
+export async function detectTargetResolution(
+  videoPaths: string[],
+): Promise<{ width: number; height: number }> {
+  let landscapeCount = 0
+  let portraitCount = 0
+  let squareCount = 0
+  let firstWidth = 1920
+  let firstHeight = 1080
+
+  for (let i = 0; i < videoPaths.length; i++) {
+    const info = await getVideoInfo(videoPaths[i])
+    const { width, height } = info
+
+    if (i === 0) {
+      firstWidth = width || 1920
+      firstHeight = height || 1080
+    }
+
+    if (width > height) landscapeCount++
+    else if (height > width) portraitCount++
+    else squareCount++
+  }
+
+  // 竖屏占多数 → 输出竖屏
+  if (portraitCount > landscapeCount && portraitCount >= squareCount) {
+    return { width: 1080, height: 1920 }
+  }
+  // 方形占多数 → 输出方形
+  if (squareCount > landscapeCount && squareCount > portraitCount) {
+    return { width: 1080, height: 1080 }
+  }
+  // 横屏占多数 → 输出横屏
+  if (landscapeCount > 0) {
+    return { width: 1920, height: 1080 }
+  }
+
+  // 平票或其他情况 → 用第一个视频的实际分辨率（取偶数，yuv420p 要求）
+  return {
+    width: Math.ceil(firstWidth / 2) * 2,
+    height: Math.ceil(firstHeight / 2) * 2,
+  }
+}
+
+/**
  * 将单个视频标准化为统一格式（用于拼接前的预处理）
  * @param inputPath 输入视频路径
  * @param outputPath 输出视频路径
@@ -605,11 +652,13 @@ export async function normalizeVideo(
  * @param videoPaths 视频文件路径数组
  * @param normalizedDir 标准化中间文件存放目录
  * @param outputPath 最终拼接输出路径
+ * @param resolution 目标分辨率。不传时自动检测（根据视频方向选择横屏/竖屏）
  */
 export async function normalizeAndConcat(
   videoPaths: string[],
   normalizedDir: string,
   outputPath: string,
+  resolution?: { width: number; height: number },
 ): Promise<string> {
   if (videoPaths.length === 0) {
     throw new Error('视频列表不能为空')
@@ -619,11 +668,18 @@ export async function normalizeAndConcat(
     mkdirSync(normalizedDir, { recursive: true })
   }
 
+  // ★ 关键修复：resolution 未指定时，自动检测视频方向来决定目标尺寸
+  const target = resolution ?? (await detectTargetResolution(videoPaths))
+  const targetWidth = Math.ceil(target.width / 2) * 2
+  const targetHeight = Math.ceil(target.height / 2) * 2
+
+  console.log(`[FFmpeg] 标准化目标分辨率: ${targetWidth}×${targetHeight}`)
+
   // 第一遍：逐个标准化为统一格式
   const normalizedPaths: string[] = []
   for (let i = 0; i < videoPaths.length; i++) {
     const normalizedPath = join(normalizedDir, `normalized_${String(i + 1).padStart(3, '0')}.mp4`)
-    await normalizeVideo(videoPaths[i], normalizedPath)
+    await normalizeVideo(videoPaths[i], normalizedPath, targetWidth, targetHeight)
     normalizedPaths.push(normalizedPath)
   }
 
@@ -1017,6 +1073,7 @@ export async function mergeClipsWithTransitions(
   outputPath: string,
   transitionType: string,
   transitionDuration: number = 0.5,
+  resolution?: { width: number; height: number },
 ): Promise<{ path: string; degraded: boolean }> {
   if (clipPaths.length === 0) {
     throw new Error('视频片段列表不能为空')
@@ -1034,12 +1091,22 @@ export async function mergeClipsWithTransitions(
     return { path: outputPath, degraded: false }
   }
 
+  // ★ 关键修复：确定目标分辨率
+  // 1. 如果外部传了 resolution，直接使用
+  // 2. 否则从第一个片段获取原始分辨率（保持原有行为）
+  const firstInfo = await getVideoInfo(clipPaths[0])
+  const target = resolution ?? {
+    width: firstInfo.width || 1920,
+    height: firstInfo.height || 1080,
+  }
+  const targetW = Math.ceil(target.width / 2) * 2
+  const targetH = Math.ceil(target.height / 2) * 2
+
+  console.log(`[FFmpeg] 转场合并目标分辨率: ${targetW}×${targetH}`)
+
   // 2 个片段直接两两合并，无需分块
   if (clipPaths.length === 2) {
     safeUnlink(outputPath)
-    const firstInfo = await getVideoInfo(clipPaths[0])
-    const targetW = Math.ceil((firstInfo.width || 1920) / 2) * 2
-    const targetH = Math.ceil((firstInfo.height || 1080) / 2) * 2
     return mergeTwoClipsWithTransition(
       clipPaths[0], clipPaths[1], outputPath,
       transitionType, transitionDuration, targetW, targetH,
@@ -1048,11 +1115,6 @@ export async function mergeClipsWithTransitions(
 
   // ── 分块合并：逐对合并 N 个片段 ─────────────────────────
   safeUnlink(outputPath)
-
-  // 从第一个片段获取目标分辨率（确保为偶数）
-  const firstInfo = await getVideoInfo(clipPaths[0])
-  const targetW = Math.ceil((firstInfo.width || 1920) / 2) * 2
-  const targetH = Math.ceil((firstInfo.height || 1080) / 2) * 2
 
   // 临时文件目录（使用 outputPath 所在目录）
   const outputDir = join(outputPath, '..')

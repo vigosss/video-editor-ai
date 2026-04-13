@@ -11,7 +11,7 @@ import type { PipelineProgress, PipelineStepConfig } from '../../shared/pipeline
 import type { Project, ProcessingStep } from '../../shared/project'
 
 import { getProject, updateProjectStatus, updateProject, createClips, getClipsByProject, deleteClipsByProject } from './database'
-import { getVideoInfo, extractAudio, extractFrames, clipVideo, mergeClips, mergeClipsWithTransitions, mixAudioStreams, embedSubtitles, getProjectWorkDir, normalizeAndConcat, checkXfadeAvailable } from './ffmpeg'
+import { getVideoInfo, extractAudio, extractFrames, clipVideo, mergeClips, mergeClipsWithTransitions, mixAudioStreams, embedSubtitles, getProjectWorkDir, normalizeAndConcat, checkXfadeAvailable, detectTargetResolution } from './ffmpeg'
 import { transcribeAudio, isModelDownloaded } from './whisper'
 import { analyzeVideo } from './glm'
 import { getBeatsForTrack, alignClipsToBeats, segmentByBeats } from './beatDetection'
@@ -28,6 +28,31 @@ import { getProjectsDir } from '../utils/paths'
 
 /** 管线进度回调 */
 export type PipelineProgressCallback = (progress: PipelineProgress) => void
+
+// ==========================================
+// 分辨率解析工具
+// ==========================================
+
+/**
+ * 将用户设置的 outputResolution 字符串转换为实际像素尺寸
+ * 'original' 模式：自动检测视频方向，选择最合适的目标分辨率
+ */
+async function resolveTargetResolution(
+  videoPaths: string[],
+  outputResolution: string,
+): Promise<{ width: number; height: number }> {
+  switch (outputResolution) {
+    case '1080p':
+      return { width: 1920, height: 1080 }
+    case '720p':
+      return { width: 1280, height: 720 }
+    case '480p':
+      return { width: 854, height: 480 }
+    case 'original':
+    default:
+      return await detectTargetResolution(videoPaths)
+  }
+}
 
 // ==========================================
 // 进度计算工具
@@ -161,13 +186,20 @@ export async function runPipeline(
         sendProgress('normalizing', 0, `正在合并 ${project.videoPaths.length} 个视频文件...`)
         checkCancelled()
 
+        // ★ 关键修复：读取 outputResolution 设置，传递给 normalizeAndConcat
+        const targetResolution = await resolveTargetResolution(
+          project.videoPaths,
+          settings.outputResolution || 'original',
+        )
+        console.log(`[Pipeline] 目标分辨率: ${targetResolution.width}×${targetResolution.height} (设置: ${settings.outputResolution || 'original'})`)
+
         const normalizedDir = join(workDir, 'normalized')
-        workingVideoPath = await normalizeAndConcat(project.videoPaths, normalizedDir, concatResultPath)
+        workingVideoPath = await normalizeAndConcat(project.videoPaths, normalizedDir, concatResultPath, targetResolution)
 
         // 更新项目的工作视频路径
         updateProject(projectId, { videoPath: workingVideoPath })
 
-        sendProgress('normalizing', 100, `视频合并完成 (${project.videoPaths.length} 个文件)`)
+        sendProgress('normalizing', 100, `视频合并完成 (${project.videoPaths.length} 个文件, ${targetResolution.width}×${targetResolution.height})`)
       }
     } else {
       // 单视频，跳过合并步骤
@@ -443,6 +475,10 @@ export async function runPipeline(
 
     sendProgress('clipping', 60, `已剪辑 ${clipPaths.length} 个片段，正在合并...`)
 
+    // ★ 关键修复：为转场合并确定目标分辨率
+    // 使用 workingVideoPath 的实际分辨率（多视频时已标准化为正确方向）
+    const mergeResolution = { width: videoInfo.width, height: videoInfo.height }
+
     // 合并片段（根据是否有转场效果选择不同方式）
     let mergedResult: string
     if (project.transitionType && project.transitionType !== 'none' && clipPaths.length > 1) {
@@ -459,6 +495,7 @@ export async function runPipeline(
           mergedPath,
           project.transitionType,
           project.transitionDuration,
+          mergeResolution,
         )
         mergedResult = transitionResult.path
         if (transitionResult.degraded) {
