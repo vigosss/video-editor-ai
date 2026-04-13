@@ -100,6 +100,10 @@ export default function ProjectDetail() {
   const [liveProgress, setLiveProgress] = useState<PipelineProgress | null>(null)
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // AI 思考过程（reasoning_content）
+  const [thinkingContent, setThinkingContent] = useState<string>('')
+  const [showThinking, setShowThinking] = useState(false)
+
   /** 加载剪辑片段 */
   const loadClips = useCallback((projectId: string) => {
     window.electronAPI.getProjectClips(projectId).then(setClips).catch(() => {})
@@ -144,6 +148,11 @@ export default function ProjectDetail() {
 
     const cleanup = window.electronAPI.onProgress((progress: PipelineProgress) => {
       setLiveProgress(progress)
+
+      // 捕获 AI 思考内容
+      if (progress.thinkingContent) {
+        setThinkingContent(progress.thinkingContent)
+      }
 
       // 完成或失败时刷新项目状态和片段列表
       if (progress.step === 'completed') {
@@ -448,6 +457,41 @@ export default function ProjectDetail() {
             </div>
           ))}
         </div>
+
+        {/* AI 思考过程 */}
+        {thinkingContent && (
+          <div className="mt-4 rounded-xl border" style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}>
+            <button
+              className="flex w-full items-center gap-2 px-4 py-3 text-left"
+              onClick={() => setShowThinking(!showThinking)}
+            >
+              <Cpu className="h-4 w-4 text-primary-400" />
+              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                AI 思考过程
+              </span>
+              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                {thinkingContent.length > 0 && `(${Math.round(thinkingContent.length / 2)}字)`}
+              </span>
+              <svg
+                className={`ml-auto h-4 w-4 transition-transform ${showThinking ? 'rotate-180' : ''}`}
+                style={{ color: 'var(--text-tertiary)' }}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showThinking && (
+              <div className="border-t px-4 py-3" style={{ borderColor: 'var(--border-color)' }}>
+                <div
+                  className="max-h-64 overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap"
+                  style={{ color: 'var(--text-secondary)', fontFamily: 'system-ui, sans-serif' }}
+                >
+                  {thinkingContent}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 错误信息 */}
         {project.status === 'failed' && project.errorMessage && (

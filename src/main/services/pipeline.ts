@@ -100,7 +100,7 @@ export async function runPipeline(
   })
 
   // 进度发送辅助函数（基于活跃步骤索引）
-  const sendProgress = (stepKey: string, stepProgress: number, message: string) => {
+  const sendProgress = (stepKey: string, stepProgress: number, message: string, thinkingContent?: string) => {
     if (signal.aborted) return
 
     const stepIndex = activeSteps.findIndex(s => s.key === stepKey)
@@ -114,6 +114,11 @@ export async function runPipeline(
       progress: stepProgress,
       overallProgress,
       message,
+    }
+
+    // 附加 AI 思考内容
+    if (thinkingContent) {
+      progress.thinkingContent = thinkingContent
     }
 
     // 发送到渲染进程
@@ -315,9 +320,9 @@ export async function runPipeline(
 
     const analysisResult = await analyzeVideo(
       analyzeOptions,
-      (progress, message) => {
+      (progress, message, extra) => {
         checkCancelled()
-        sendProgress('analyzing', progress, message)
+        sendProgress('analyzing', progress, message, extra?.thinkingContent)
       },
     )
 

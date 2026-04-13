@@ -24,6 +24,7 @@ export interface GLMClipSegment {
 export interface GLMAnalysisResult {
   clips: GLMClipSegment[]
   rawResponse: string  // 原始响应文本
+  reasoningContent?: string  // AI 思考过程（reasoning_content）
   usage?: {
     promptTokens: number
     completionTokens: number
@@ -49,7 +50,7 @@ export class GLMError extends Error {
 }
 
 /** 进度回调类型 */
-export type GLMProgressCallback = (progress: number, message: string) => void
+export type GLMProgressCallback = (progress: number, message: string, extra?: { thinkingContent?: string }) => void
 
 // ==========================================
 // 常量
@@ -58,6 +59,7 @@ export type GLMProgressCallback = (progress: number, message: string) => void
 const GLM_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
 const REQUEST_TIMEOUT = 120_000 // 120 秒超时
 const MAX_RETRIES = 3
+const MAX_COMPLETION_TOKENS = 8192
 
 
 // ==========================================
@@ -74,13 +76,14 @@ async function callGLMApi(
   signal?: AbortSignal,
 ): Promise<{
   content: string
+  reasoningContent?: string
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
 }> {
   const body = {
     model: modelId,
     messages,
     temperature: 0.7,
-    max_tokens: 4096,
+    max_tokens: MAX_COMPLETION_TOKENS,
   }
 
   const controller = new AbortController()
@@ -167,16 +170,31 @@ async function callGLMApi(
       const finishReason = choice?.finish_reason
       const retryable = finishReason === 'length' || finishReason === 'content_filter'
 
-      throw new GLMError(
-        `API 返回数据格式异常：content 为空${finishReason ? ` (finish_reason: ${finishReason})` : ''}`,
-        'INVALID_RESPONSE',
-        undefined,
-        retryable,
-      )
+      // 针对 finish_reason: length 提供更友好的错误提示
+      let errorMsg = 'API 返回数据格式异常：content 为空'
+      if (finishReason === 'length') {
+        errorMsg = 'AI 思考过程过长，导致输出 token 耗尽未生成最终结果。请尝试简化 Prompt 或切换模型后重试。'
+      } else if (finishReason === 'content_filter') {
+        errorMsg = 'AI 响应被内容安全过滤器拦截，请尝试调整 Prompt 内容后重试。'
+      } else if (finishReason) {
+        errorMsg = `API 返回数据异常 (finish_reason: ${finishReason})`
+      }
+
+      throw new GLMError(errorMsg, 'INVALID_RESPONSE', undefined, retryable)
+    }
+
+    // 提取推理/思考内容（reasoning_content）
+    const reasoningContent = choice?.message?.reasoning_content
+      ? String(choice.message.reasoning_content)
+      : undefined
+
+    if (reasoningContent) {
+      console.log(`[老兵AI] AI 思考过程: ${reasoningContent.substring(0, 200)}...`)
     }
 
     return {
       content,
+      reasoningContent,
       usage: data?.usage
         ? {
             prompt_tokens: data.usage.prompt_tokens ?? 0,
@@ -206,6 +224,7 @@ async function callWithRetry(
   signal?: AbortSignal,
 ): Promise<{
   content: string
+  reasoningContent?: string
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
 }> {
   let lastError: GLMError | null = null
@@ -660,7 +679,7 @@ export async function analyzeVideo(
     onProgress?.(35, `分析请求失败，第 ${attempt} 次重试中... (${error.message})`)
   })
 
-  onProgress?.(80, '正在解析分析结果...')
+  onProgress?.(80, '正在解析分析结果...', result.reasoningContent ? { thinkingContent: result.reasoningContent } : undefined)
 
   // 步骤4: 解析响应
   const clips = parseClipsFromResponse(result.content)
@@ -683,6 +702,7 @@ export async function analyzeVideo(
   return {
     clips,
     rawResponse: result.content,
+    reasoningContent: result.reasoningContent,
     usage: result.usage
       ? {
           promptTokens: result.usage.prompt_tokens,

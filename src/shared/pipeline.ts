@@ -10,6 +10,7 @@ export interface PipelineProgress {
   progress: number       // 当前步骤进度 0-100
   overallProgress: number // 总体进度 0-100
   message: string
+  thinkingContent?: string  // AI 思考过程（reasoning_content）
 }
 
 /** 管线步骤配置 */
