@@ -414,13 +414,19 @@ export async function runPipeline(
         mergedResult = await mergeClips(clipPaths, mergedPath)
         sendProgress('clipping', 100, '视频剪辑与合并完成（转场不可用，已使用硬切）')
       } else {
-        mergedResult = await mergeClipsWithTransitions(
+        const transitionResult = await mergeClipsWithTransitions(
           clipPaths,
           mergedPath,
           project.transitionType,
           project.transitionDuration,
         )
-        sendProgress('clipping', 100, `视频剪辑与合并完成（${project.transitionType} 转场）`)
+        mergedResult = transitionResult.path
+        if (transitionResult.degraded) {
+          console.warn('[Pipeline] 转场效果未能应用，已降级为硬切合并')
+          sendProgress('clipping', 100, '视频剪辑与合并完成（转场不可用，已使用硬切）')
+        } else {
+          sendProgress('clipping', 100, `视频剪辑与合并完成（${project.transitionType} 转场）`)
+        }
       }
     } else {
       mergedResult = await mergeClips(clipPaths, mergedPath)

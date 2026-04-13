@@ -922,7 +922,7 @@ async function mergeTwoClipsWithTransition(
   transitionDuration: number,
   targetW: number,
   targetH: number,
-): Promise<string> {
+): Promise<{ path: string; degraded: boolean }> {
   const clipPaths = [clipA, clipB]
 
   // 探测两个片段的时长和音频信息
@@ -961,9 +961,9 @@ async function mergeTwoClipsWithTransition(
   // ── 方案一：完整转场 ──────────────────────────────────────
   try {
     await runTransitionMerge({ clipPaths, outputPath, complexFilter, allHaveAudio })
-    return outputPath
+    return { path: outputPath, degraded: false }
   } catch (err) {
-    console.warn(`[FFmpeg] 两两合并完整转场失败: ${(err as Error).message}`)
+    console.warn(`[FFmpeg] 两两合并完整转场失败，尝试降级: ${(err as Error).message}`)
   }
 
   // ── 方案二：仅视频转场，音频 concat ──────────────────────
@@ -990,14 +990,15 @@ async function mergeTwoClipsWithTransition(
       complexFilter: fullFallbackFilter,
       allHaveAudio,
     })
-    return outputPath
+    return { path: outputPath, degraded: true }
   } catch (err2) {
-    console.warn(`[FFmpeg] 两两合并降级方案也失败: ${(err2 as Error).message}`)
+    console.warn(`[FFmpeg] 仅视频转场也失败，降级为硬切: ${(err2 as Error).message}`)
   }
 
   // ── 方案三：直接 concat，无转场 ──────────────────────────
   safeUnlink(outputPath)
-  return mergeClips(clipPaths, outputPath)
+  const concatResult = await mergeClips(clipPaths, outputPath)
+  return { path: concatResult, degraded: true }
 }
 
 /**
@@ -1016,7 +1017,7 @@ export async function mergeClipsWithTransitions(
   outputPath: string,
   transitionType: string,
   transitionDuration: number = 0.5,
-): Promise<string> {
+): Promise<{ path: string; degraded: boolean }> {
   if (clipPaths.length === 0) {
     throw new Error('视频片段列表不能为空')
   }
@@ -1030,7 +1031,7 @@ export async function mergeClipsWithTransitions(
   if (clipPaths.length === 1) {
     safeUnlink(outputPath)
     copyFileSync(clipPaths[0], outputPath)
-    return outputPath
+    return { path: outputPath, degraded: false }
   }
 
   // 2 个片段直接两两合并，无需分块
@@ -1056,6 +1057,7 @@ export async function mergeClipsWithTransitions(
   // 临时文件目录（使用 outputPath 所在目录）
   const outputDir = join(outputPath, '..')
   const tempFiles: string[] = []
+  let anyDegraded = false
 
   try {
     // 第 1 轮：clip_0 + clip_1 → chunk_000
@@ -1066,10 +1068,12 @@ export async function mergeClipsWithTransitions(
     const chunk0 = join(outputDir, 'chunk_000.mp4')
     tempFiles.push(chunk0)
 
-    currentPath = await mergeTwoClipsWithTransition(
+    const round1 = await mergeTwoClipsWithTransition(
       clipPaths[0], clipPaths[1], chunk0,
       transitionType, transitionDuration, targetW, targetH,
     )
+    currentPath = round1.path
+    if (round1.degraded) anyDegraded = true
     console.log(`[FFmpeg] 分块合并 1/${clipPaths.length - 1} 完成`)
 
     // 第 2 轮起：chunk_{i-1} + clip_{i+1} → chunk_i
@@ -1077,10 +1081,12 @@ export async function mergeClipsWithTransitions(
       const chunkFile = join(outputDir, `chunk_${String(i - 1).padStart(3, '0')}.mp4`)
       tempFiles.push(chunkFile)
 
-      currentPath = await mergeTwoClipsWithTransition(
+      const round = await mergeTwoClipsWithTransition(
         currentPath, clipPaths[i], chunkFile,
         transitionType, transitionDuration, targetW, targetH,
       )
+      currentPath = round.path
+      if (round.degraded) anyDegraded = true
       console.log(`[FFmpeg] 分块合并 ${i}/${clipPaths.length - 1} 完成`)
     }
 
@@ -1101,7 +1107,7 @@ export async function mergeClipsWithTransitions(
     throw new Error('转场合并完成但输出文件不存在')
   }
 
-  return outputPath
+  return { path: outputPath, degraded: anyDegraded }
 }
 
 // ==========================================
