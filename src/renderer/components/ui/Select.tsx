@@ -42,13 +42,32 @@ export function Select({
   const updatePosition = useCallback(() => {
     if (!buttonRef.current) return
     const rect = buttonRef.current.getBoundingClientRect()
-    setDropdownStyle({
-      position: 'fixed',
-      top: rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
-      zIndex: 9999,
-    })
+    const viewportHeight = window.innerHeight
+    const maxDropdownHeight = 240 // max-h-60 = 15rem = 240px
+    const spaceBelow = viewportHeight - rect.bottom - 4
+    const spaceAbove = rect.top - 4
+
+    if (spaceBelow >= maxDropdownHeight || spaceBelow >= spaceAbove) {
+      // 下方空间足够，或者下方比上方大，放下方
+      setDropdownStyle({
+        position: 'fixed',
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+        zIndex: 9999,
+        maxHeight: Math.min(maxDropdownHeight, spaceBelow),
+      })
+    } else {
+      // 下方空间不足，翻转向上
+      setDropdownStyle({
+        position: 'fixed',
+        bottom: viewportHeight - rect.top + 4,
+        left: rect.left,
+        width: rect.width,
+        zIndex: 9999,
+        maxHeight: Math.min(maxDropdownHeight, spaceAbove),
+      })
+    }
   }, [])
 
   // 打开时计算位置，并监听滚动/resize
@@ -128,14 +147,14 @@ export function Select({
                 transition={{ duration: 0.15 }}
                 style={{
                   ...dropdownStyle,
-                  overflow: 'hidden',
+                  overflow: 'auto',
                   borderRadius: '0.75rem',
                   border: '1px solid var(--border-color)',
                   background: 'var(--bg-secondary)',
                   boxShadow: 'var(--glow-primary)',
                 }}
               >
-                <div className="max-h-60 overflow-y-auto py-1">
+                <div className="overflow-y-auto py-1">
                   {(() => {
                     // 检查是否有分组选项
                     const hasGroups = options.some((o) => o.group)
