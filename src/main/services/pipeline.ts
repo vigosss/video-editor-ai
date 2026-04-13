@@ -363,6 +363,26 @@ export async function runPipeline(
       throw new Error('所有剪辑片段的时间范围无效（超出视频时长或时长不足 0.1 秒）')
     }
 
+    // 节拍同步 + 转场效果补偿：
+    // xfade 转场会"吃掉"每两个片段之间 transitionDuration 秒的时长，
+    // 导致转场实际发生位置比预期提前，无法对齐节拍点。
+    // 解决方案：将每个非末尾片段的 endTime 延长 transitionDuration 秒，
+    // 这样 xfade offset 计算后转场恰好发生在原始节拍点。
+    const needsBeatSync = project.beatSyncMode !== 'none'
+    const needsTransition = project.transitionType && project.transitionType !== 'none'
+    if (needsBeatSync && needsTransition && clipParams.length > 1) {
+      const td = project.transitionDuration || 0.5
+      for (let i = 0; i < clipParams.length - 1; i++) {
+        // 延长结束时间，但不超过视频总时长
+        const extendedEnd = Math.min(clipParams[i].endTime + td, videoInfo.duration)
+        // 确保延长后片段仍然有效（时长 > 转场时长 + 0.1s）
+        if (extendedEnd - clipParams[i].startTime > td + 0.1) {
+          clipParams[i].endTime = extendedEnd
+        }
+      }
+      console.log(`[Pipeline] 已为 ${clipParams.length - 1} 个片段延长结束时间（+${td}s），补偿转场时长以对齐节拍`)
+    }
+
     // 剪辑视频片段
     const clipPaths = await clipVideo(workingVideoPath, clipParams, clipsDir)
 
