@@ -1,18 +1,24 @@
 /** 模型选项（用于下拉选择） */
 export const MODEL_OPTIONS = [
-  { value: 'GLM-4.6V-FlashX', label: '老兵AI 4.6L' },
-  { value: 'GLM-5V-Turbo', label: '老兵AI 5.0T' },
-  { value: 'GLM-4.6V', label: '老兵AI 4.6' },
-  { value: 'GLM-4.7-FlashX', label: '老兵AI 4.7L' },
-]
+  { value: "GLM-5V-Turbo", label: "老兵AI 最新版" },
+  { value: "GLM-4.6V", label: "老兵AI 稳定版" },
+  { value: "GLM-4.6V-FlashX", label: "老兵AI 拉垮版" },
+];
 
 /** 模型名称映射（用于详情页展示） */
 export const MODEL_LABEL_MAP: Record<string, string> = {
-  "GLM-4.6V-FlashX": "老兵AI 4.6L",
-  "GLM-5V-Turbo": "老兵AI 5.0T",
-  "GLM-4.6V": "老兵AI 4.6",
-  "GLM-4.7-FlashX": "老兵AI 4.7L",
+  "GLM-5V-Turbo": "老兵AI 最新版",
+  "GLM-4.6V": "老兵AI 稳定版",
+  "GLM-4.6V-FlashX": "老兵AI 拉垮版",
 };
+
+/** GLM 模型 API 标识符映射（代码类型 → API 标识符） */
+export const GLM_MODEL_ID_MAP: Record<string, string> = {
+  "GLM-5V-Turbo": "glm-5v-turbo",
+  "GLM-4.6V": "glm-4.6v",
+  "GLM-4.6V-FlashX": "glm-4.6v-flash",
+};
+
 
 /** 分析模式选项（用于下拉选择） */
 export const ANALYSIS_MODE_OPTIONS = [
@@ -26,14 +32,6 @@ export const ANALYSIS_MODE_LABEL_MAP: Record<string, string> = {
   quick: '快速粗剪',
   standard: '标准剪辑',
   deep: '深度精剪',
-}
-
-/** GLM 模型 API 标识符映射（代码类型 → API 标识符） */
-export const GLM_MODEL_ID_MAP: Record<string, string> = {
-  'GLM-4.6V-FlashX': 'glm-4.6v-flash',
-  'GLM-5V-Turbo': 'glm-5v-turbo',
-  'GLM-4.6V': 'glm-4.6v',
-  'GLM-4.7-FlashX': 'glm-4.7-flash',
 }
 
 /** 节拍同步模式选项 */
