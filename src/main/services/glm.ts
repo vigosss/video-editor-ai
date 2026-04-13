@@ -430,6 +430,9 @@ function buildMessages(
   systemPrompt: string,
   beatTimestamps?: number[],
   beatSyncMode?: BeatSyncMode,
+  frameTimestamps?: number[],
+  videoDuration?: number,
+  frameInterval?: number,
 ): Array<Record<string, unknown>> {
   const systemMessage = {
     role: 'system',
@@ -438,12 +441,40 @@ function buildMessages(
 
   const userContent: Array<Record<string, unknown>> = []
 
-  // 添加关键帧图片
-  for (const base64Image of base64Images) {
+  // 添加视频元信息（总时长、帧间隔、帧数）
+  if (videoDuration !== undefined || frameInterval !== undefined) {
+    const metaLines: string[] = ['[视频元信息]']
+    if (videoDuration !== undefined) {
+      metaLines.push(`视频总时长：${videoDuration.toFixed(1)} 秒`)
+    }
+    if (frameInterval !== undefined) {
+      metaLines.push(`帧抽取间隔：每 ${frameInterval} 秒 1 帧`)
+    }
+    metaLines.push(`本次发送关键帧数量：${base64Images.length} 帧`)
+    if (frameTimestamps && frameTimestamps.length > 0) {
+      metaLines.push(`帧时间戳范围：${frameTimestamps[0].toFixed(1)}s ~ ${frameTimestamps[frameTimestamps.length - 1].toFixed(1)}s`)
+    }
+    metaLines.push('')
+    metaLines.push('重要：你看到的每张图片已标注其在原视频中的精确时间戳。输出的 startTime/endTime 必须基于图片标注的时间戳，不得自行估算。')
+    userContent.push({
+      type: 'text',
+      text: metaLines.join('\n'),
+    })
+  }
+
+  // 添加关键帧图片（每帧前紧贴时间戳文字标签）
+  for (let i = 0; i < base64Images.length; i++) {
+    // 在图片前插入时间戳标签（文字紧贴图片，确保注意力关联）
+    if (frameTimestamps && frameTimestamps[i] !== undefined) {
+      userContent.push({
+        type: 'text',
+        text: `[帧 ${String(i + 1).padStart(2, '0')} | 时间戳: ${frameTimestamps[i].toFixed(2)}s]`,
+      })
+    }
     userContent.push({
       type: 'image_url',
       image_url: {
-        url: base64Image,
+        url: base64Images[i],
       },
     })
   }
@@ -531,6 +562,32 @@ export interface AnalyzeVideoOptions {
   apiKey?: string
   beatTimestamps?: number[]
   beatSyncMode?: BeatSyncMode
+  frameTimestamps?: number[]   // 每帧对应的时间戳（秒）
+  videoDuration?: number       // 视频总时长（秒）
+  frameInterval?: number       // 帧抽取间隔（秒）
+}
+
+/** 发送给 AI 的最大帧数限制（避免注意力衰减） */
+const MAX_FRAMES_FOR_AI = 25
+
+/**
+ * 均匀选取指定数量的帧，返回选中的路径和对应的原始索引
+ */
+function selectFramesWithIndices(paths: string[], limit: number): { paths: string[]; indices: number[] } {
+  if (paths.length <= limit) {
+    return { paths, indices: paths.map((_, i) => i) }
+  }
+
+  const step = (paths.length - 1) / (limit - 1)
+  const selectedPaths: string[] = []
+  const selectedIndices: number[] = []
+  for (let i = 0; i < limit; i++) {
+    const index = Math.round(step * i)
+    const clampedIndex = Math.min(index, paths.length - 1)
+    selectedPaths.push(paths[clampedIndex])
+    selectedIndices.push(clampedIndex)
+  }
+  return { paths: selectedPaths, indices: selectedIndices }
 }
 
 /**
@@ -561,17 +618,40 @@ export async function analyzeVideo(
   console.log(`[GLM] 开始分析: 模型=${modelId}, 分析模式=${analysisMode}`)
   console.log(`[GLM] 关键帧数量: ${framePaths.length}`)
 
-  // 步骤1: 读取关键帧为 base64（发送全部帧，不限制数量）
+  // 步骤1: 均匀选取帧并限制数量（避免注意力衰减）
+  const { paths: selectedPaths, indices: selectedIndices } = selectFramesWithIndices(framePaths, MAX_FRAMES_FOR_AI)
+  console.log(`[GLM] 均匀选取 ${selectedPaths.length} 帧（原始 ${framePaths.length} 帧）`)
+
+  // 根据选取的帧索引，计算对应的时间戳
+  let selectedTimestamps: number[] | undefined
+  if (options.frameTimestamps && options.frameTimestamps.length > 0) {
+    // 使用 pipeline 传入的精确时间戳
+    selectedTimestamps = selectedIndices.map(i => options.frameTimestamps![i])
+  } else if (options.frameInterval) {
+    // 回退：根据帧间隔和索引计算时间戳
+    selectedTimestamps = selectedIndices.map(i => i * options.frameInterval!)
+  }
+
   onProgress?.(0, '正在读取关键帧图片...')
-  const base64Images = await readFramesAsBase64(framePaths, framePaths.length, onProgress)
+  const base64Images = await readFramesAsBase64(selectedPaths, selectedPaths.length, onProgress)
 
   if (base64Images.length === 0) {
     throw new GLMError('没有可用的关键帧图片', 'NO_FRAMES', undefined, false)
   }
 
-  // 步骤2: 构造请求消息
+  // 步骤2: 构造请求消息（传入帧时间戳和视频元信息）
   onProgress?.(30, '正在构造分析请求...')
-  const messages = buildMessages(base64Images, subtitleText, userPrompt, systemPrompt, options.beatTimestamps, options.beatSyncMode)
+  const messages = buildMessages(
+    base64Images,
+    subtitleText,
+    userPrompt,
+    systemPrompt,
+    options.beatTimestamps,
+    options.beatSyncMode,
+    selectedTimestamps,
+    options.videoDuration,
+    options.frameInterval,
+  )
 
   // 步骤3: 调用 API（带重试）
   onProgress?.(35, `正在调用 ${MODEL_LABEL_MAP[model]} 进行分析，请稍候...`);

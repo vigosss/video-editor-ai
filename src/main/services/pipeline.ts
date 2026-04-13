@@ -252,6 +252,9 @@ export async function runPipeline(
 
     const framePaths = await extractFrames(workingVideoPath, framesDir, interval)
 
+    // 计算每帧的精确时间戳（帧索引 × 抽帧间隔）
+    const frameTimestamps = framePaths.map((_, i) => i * interval)
+
     sendProgress('extracting_frames', 100, `关键帧抽取完成，共 ${framePaths.length} 帧`)
 
     // ==========================================
@@ -292,6 +295,10 @@ export async function runPipeline(
       model: project.model,
       analysisMode: project.analysisMode,
       systemPrompt: settings.systemPrompt,
+      // 传递帧时间戳和视频元信息，让 AI 能精确关联帧图片与视频时间轴
+      frameTimestamps,
+      videoDuration: videoInfo.duration,
+      frameInterval: interval,
     }
 
     // ai_with_beats 模式：将节拍信息传给 AI
@@ -317,6 +324,34 @@ export async function runPipeline(
     if (analysisResult.clips.length === 0) {
       throw new Error('AI 分析完成但未返回有效的剪辑片段，请尝试调整 Prompt 或切换模型')
     }
+
+    // 校验 AI 返回的片段：过滤掉时间范围异常的片段
+    const validClips = analysisResult.clips.filter((clip, idx) => {
+      if (clip.startTime < 0) {
+        console.warn(`[Pipeline] 片段 ${idx + 1} startTime 为负数 (${clip.startTime})，已过滤`)
+        return false
+      }
+      if (clip.endTime > videoInfo.duration + 1) {
+        console.warn(`[Pipeline] 片段 ${idx + 1} endTime (${clip.endTime}) 超出视频时长 (${videoInfo.duration})，已过滤`)
+        return false
+      }
+      if (clip.endTime <= clip.startTime) {
+        console.warn(`[Pipeline] 片段 ${idx + 1} endTime <= startTime (${clip.startTime}-${clip.endTime})，已过滤`)
+        return false
+      }
+      return true
+    })
+
+    if (validClips.length === 0) {
+      throw new Error('AI 返回的剪辑片段时间范围全部异常，请尝试调整 Prompt 或切换模型后重试')
+    }
+
+    if (validClips.length < analysisResult.clips.length) {
+      console.warn(`[Pipeline] AI 返回 ${analysisResult.clips.length} 个片段，其中 ${analysisResult.clips.length - validClips.length} 个时间范围异常已过滤`)
+    }
+
+    // 用校验后的片段替换原始结果
+    analysisResult.clips = validClips
 
     // 对齐片段时间到节拍（ai_then_align 模式）
     let finalClips = analysisResult.clips
