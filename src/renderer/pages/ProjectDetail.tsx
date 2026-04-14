@@ -1,386 +1,53 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { toast } from 'react-toastify'
-import {
-  ArrowLeft,
-  FileVideo,
-  Clock,
-  Cpu,
-  Wand2,
-  CheckCircle2,
-  Circle,
-  Loader2,
-  XCircle,
-  Play,
-  Scissors,
-  // Upload,         // 一键发布暂不可用
-  AlertCircle,
-  RefreshCw,
-  Film,
-  Trash2,
-  StopCircle,
-  // ExternalLink,   // 一键发布暂不可用
-  FolderOpen,
-  Music,
-  Image,
-  Eye,
-  ChevronDown,
-  Pencil,
-  ArrowUp,
-  ArrowDown,
-  Save,
-  X,
-} from 'lucide-react'
+import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react'
 import { Button } from '../components/ui/Button'
-import { Badge } from '../components/ui/Badge'
-import { Progress } from '../components/ui/Progress'
-import { Card } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
-import { PublishModal } from '../components/PublishModal'
-import { useProjectStore } from '../stores/projectStore'
-import type { Project, ProjectStatus, ProcessingStep, Clip, UploadPlatform, UploadProgress, UploadRecord, IntermediateVideo, FrameFileInfo } from '@shared/types'
-import type { PipelineProgress } from '@shared/pipeline'
-import { MODEL_LABEL_MAP, ANALYSIS_MODE_LABEL_MAP, AUDIO_MODE_LABEL_MAP, BEAT_SYNC_MODE_LABEL_MAP, TRANSITION_TYPE_LABEL_MAP } from '@shared/constants'
-import { PLATFORM_CONFIGS } from '@shared/platform'
-
-/** 处理步骤列表 */
-const PROCESSING_STEPS: { key: ProcessingStep; label: string }[] = [
-  { key: 'normalizing', label: '视频合并' },
-  { key: 'parsing', label: '视频解析' },
-  { key: 'extracting', label: '音频提取' },
-  { key: 'transcribing', label: '语音转录' },
-  { key: 'extracting_frames', label: '关键帧抽取' },
-  { key: 'detecting_beats', label: '节拍分析' },
-  { key: 'analyzing', label: 'AI 分析' },
-  { key: 'clipping', label: '视频剪辑' },
-  { key: 'embedding_subs', label: '字幕嵌入' },
-  { key: 'mixing_audio', label: '音频混音' },
-]
-
-/** 步骤图标 */
-function StepIcon({ step, currentStep, status }: { step: ProcessingStep; currentStep: ProcessingStep; status: ProjectStatus }) {
-  const stepIndex = PROCESSING_STEPS.findIndex((s) => s.key === step)
-  const currentIndex = PROCESSING_STEPS.findIndex((s) => s.key === currentStep)
-
-  if (status === 'completed' || stepIndex < currentIndex) {
-    return <CheckCircle2 className="h-5 w-5 text-green-500" />
-  }
-  if (stepIndex === currentIndex && status === 'processing') {
-    return <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
-  }
-  if (status === 'failed' && stepIndex === currentIndex) {
-    return <XCircle className="h-5 w-5 text-red-500" />
-  }
-  return <Circle className="h-5 w-5" style={{ color: 'var(--text-tertiary)' }} />
-}
-
-/** 格式化时间戳 */
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-}
-
-/** 格式化日期 */
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('zh-CN')
-}
+import { useProjectDetail } from '../hooks/useProjectDetail'
+import { ProjectHeader } from '../components/project/ProjectHeader'
+import { ProjectInfoCard } from '../components/project/ProjectInfoCard'
+import { ProcessingProgressCard } from '../components/project/ProcessingProgressCard'
+import { ClipsCard } from '../components/project/ClipsCard'
+import { KeyframesCard } from '../components/project/KeyframesCard'
+import { VideoPreviewCard } from '../components/project/VideoPreviewCard'
+import { PublishCard } from '../components/project/PublishCard'
 
 export default function ProjectDetail() {
-  const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
-  const { currentProject, loading, fetchProject, deleteProject } = useProjectStore()
-  const [clips, setClips] = useState<Clip[]>([])
-  const [deleting, setDeleting] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [cancelling, setCancelling] = useState(false)
-
-  // // 发布相关状态 — 一键发布暂不可用
-  // const [publishPlatform, setPublishPlatform] = useState<UploadPlatform | null>(null)
-  // const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
-  // const [uploadRecords, setUploadRecords] = useState<UploadRecord[]>([])
-
-  // 中间视频列表
-  const [intermediateVideos, setIntermediateVideos] = useState<IntermediateVideo[]>([])
-
-  // 实时进度状态（本地缓存，不通过 store 刷新）
-  const [liveProgress, setLiveProgress] = useState<PipelineProgress | null>(null)
-  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  // AI 思考过程（reasoning_content）
-  const [thinkingContent, setThinkingContent] = useState<string>('')
-  const [showThinking, setShowThinking] = useState(false)
-
-  // 关键帧图片列表
-  const [frameFiles, setFrameFiles] = useState<FrameFileInfo[]>([])
-  // 关键帧展开状态
-  const [showFrames, setShowFrames] = useState(false)
-  // 关键帧图片放大查看
-  const [previewFrame, setPreviewFrame] = useState<FrameFileInfo | null>(null)
-
-  // 剪辑编辑模式
-  const [editingClips, setEditingClips] = useState(false)
-  const [editedClips, setEditedClips] = useState<Array<{ startTime: number; endTime: number; reason: string }>>([])
-  const [reRendering, setReRendering] = useState(false)
-
-  /** 加载剪辑片段 */
-  const loadClips = useCallback((projectId: string) => {
-    window.electronAPI.getProjectClips(projectId).then(setClips).catch(() => {})
-  }, [])
-
-  // /** 加载上传记录 — 一键发布暂不可用 */
-  // const loadUploadRecords = useCallback((projectId: string) => {
-  //   window.electronAPI.getUploadRecords(projectId).then(setUploadRecords).catch(() => {})
-  // }, [])
-
-  useEffect(() => {
-    if (id) {
-      fetchProject(id)
-      loadClips(id)
-      // loadUploadRecords(id) // 一键发布暂不可用
-    }
-  }, [id, fetchProject, loadClips])
-
-  // /** 监听上传进度 — 一键发布暂不可用 */
-  // useEffect(() => {
-  //   if (!id) return
-  //
-  //   const cleanup = window.electronAPI.onUploadProgress((progress: UploadProgress) => {
-  //     setUploadProgress(progress)
-  //
-  //     // 上传完成或失败时刷新记录
-  //     if (progress.status === 'completed') {
-  //       toast.success(`视频已成功发布到${PLATFORM_CONFIGS[progress.platform].name}！`)
-  //       if (id) loadUploadRecords(id)
-  //     } else if (progress.status === 'failed') {
-  //       toast.error(progress.message || '发布失败')
-  //       if (id) loadUploadRecords(id)
-  //     }
-  //   })
-  //
-  //   return cleanup
-  // }, [id, loadUploadRecords])
-
-  /** 监听处理进度 */
-  useEffect(() => {
-    if (!id) return
-
-    const cleanup = window.electronAPI.onProgress((progress: PipelineProgress) => {
-      setLiveProgress(progress)
-
-      // 捕获 AI 思考内容
-      if (progress.thinkingContent) {
-        setThinkingContent(progress.thinkingContent)
-      }
-
-      // 完成或失败时刷新项目状态和片段列表
-      if (progress.step === 'completed') {
-        toast.success('视频处理完成！')
-        fetchProject(id)
-        loadClips(id)
-      } else if (progress.step === 'failed') {
-        toast.error(progress.message || '处理失败')
-        fetchProject(id)
-      }
-    })
-
-    return cleanup
-  }, [id, fetchProject, loadClips])
-
-  /** 加载中间视频列表（处理完成或失败时） */
-  useEffect(() => {
-    if (!id) return
-    if (currentProject?.status !== 'completed' && currentProject?.status !== 'failed') {
-      setIntermediateVideos([])
-      return
-    }
-    window.electronAPI.getIntermediateVideos(id).then(setIntermediateVideos).catch(() => {})
-  }, [id, currentProject?.status])
-
-
-  /** 展开关键帧时加载图片 Data URL */
-  useEffect(() => {
-    if (!id || !showFrames) return
-    if (currentProject?.status !== 'completed') return
-    // 仅在未加载或加载为空时请求
-    if (frameFiles.length > 0 && frameFiles.some(f => f.dataUrl)) return
-    window.electronAPI.getProjectFrameFiles(id, true).then(setFrameFiles).catch(() => {})
-  }, [id, showFrames, currentProject?.status])
-
-  /** 处理中的定时轮询（保底机制，每5秒刷新一次） */
-  useEffect(() => {
-    if (!id) return
-    if (currentProject?.status !== 'processing') {
-      if (progressTimerRef.current) {
-        clearInterval(progressTimerRef.current)
-        progressTimerRef.current = null
-      }
-      return
-    }
-
-    progressTimerRef.current = setInterval(() => {
-      fetchProject(id)
-    }, 5000)
-
-    return () => {
-      if (progressTimerRef.current) {
-        clearInterval(progressTimerRef.current)
-        progressTimerRef.current = null
-      }
-    }
-  }, [id, currentProject?.status, fetchProject])
-
-  /** 删除项目 */
-  const handleDelete = async () => {
-    if (!id) return
-    setDeleting(true)
-    try {
-      await deleteProject(id)
-      toast.success('项目已删除')
-      navigate('/projects')
-    } catch {
-      toast.error('删除失败')
-    } finally {
-      setDeleting(false)
-    }
-  }
-
-  /** 重新处理 */
-  const handleRetry = async () => {
-    if (!id) return
-    try {
-      await window.electronAPI.startProcess(id)
-      toast.success('已重新开始处理')
-      setLiveProgress(null)
-      fetchProject(id)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '启动处理失败')
-    }
-  }
-
-  /** 取消处理 */
-  const handleCancel = async () => {
-    if (!id) return
-    setCancelling(true)
-    try {
-      await window.electronAPI.cancelProcess(id)
-      toast.info('已发送取消请求')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '取消失败')
-    } finally {
-      setCancelling(false)
-    }
-  }
-
-  /** 进入剪辑编辑模式 */
-  const handleStartEditClips = () => {
-    setEditedClips(clips.map((c) => ({
-      startTime: c.startTime,
-      endTime: c.endTime,
-      reason: c.reason,
-    })))
-    setEditingClips(true)
-  }
-
-  /** 退出编辑模式 */
-  const handleCancelEditClips = () => {
-    setEditingClips(false)
-    setEditedClips([])
-  }
-
-  /** 更新编辑中的片段 */
-  const updateEditedClip = (index: number, field: 'startTime' | 'endTime' | 'reason', value: number | string) => {
-    setEditedClips((prev) => prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)))
-  }
-
-  /** 删除编辑中的片段 */
-  const removeEditedClip = (index: number) => {
-    setEditedClips((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  /** 上移片段 */
-  const moveEditedClipUp = (index: number) => {
-    if (index === 0) return
-    setEditedClips((prev) => {
-      const next = [...prev]
-      ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
-      return next
-    })
-  }
-
-  /** 下移片段 */
-  const moveEditedClipDown = (index: number) => {
-    if (index >= editedClips.length - 1) return
-    setEditedClips((prev) => {
-      const next = [...prev]
-      ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
-      return next
-    })
-  }
-
-  /** 保存并重新渲染 */
-  const handleReRender = async () => {
-    if (!id) return
-    if (editedClips.length === 0) {
-      toast.error('至少需要保留一个剪辑片段')
-      return
-    }
-    // 校验时间有效性
-    for (let i = 0; i < editedClips.length; i++) {
-      const c = editedClips[i]
-      if (c.endTime <= c.startTime) {
-        toast.error(`片段 ${i + 1} 的结束时间必须大于开始时间`)
-        return
-      }
-    }
-    setReRendering(true)
-    setLiveProgress(null)
-    try {
-      await window.electronAPI.reRenderClips(id, editedClips)
-      toast.success('已开始重新渲染')
-      setEditingClips(false)
-      setEditedClips([])
-      fetchProject(id)
-      loadClips(id)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '重新渲染失败')
-    } finally {
-      setReRendering(false)
-    }
-  }
-
-  // /** 发布视频到平台 — 一键发布暂不可用 */
-  // const handlePublish = async (params: {
-  //   projectId: string
-  //   platform: UploadPlatform
-  //   title: string
-  //   description: string
-  //   tags: string
-  // }) => {
-  //   await window.electronAPI.startUpload({
-  //     projectId: params.projectId,
-  //     platform: params.platform,
-  //     title: params.title,
-  //     description: params.description,
-  //     tags: params.tags,
-  //   })
-  // }
-  //
-  // /** 打开发布弹窗 */
-  // const openPublishModal = (platform: UploadPlatform) => {
-  //   setUploadProgress(null)
-  //   setPublishPlatform(platform)
-  // }
-  //
-  // /** 关闭发布弹窗 */
-  // const closePublishModal = () => {
-  //   setPublishPlatform(null)
-  //   setUploadProgress(null)
-  // }
+  const {
+    id,
+    navigate,
+    project,
+    loading,
+    clips,
+    liveProgress,
+    thinkingContent,
+    showThinking,
+    setShowThinking,
+    frameFiles,
+    showFrames,
+    setShowFrames,
+    intermediateVideos,
+    editingClips,
+    editedClips,
+    reRendering,
+    handleStartEditClips,
+    handleCancelEditClips,
+    updateEditedClip,
+    removeEditedClip,
+    moveEditedClipUp,
+    moveEditedClipDown,
+    handleReRender,
+    deleting,
+    showDeleteModal,
+    setShowDeleteModal,
+    cancelling,
+    handleDelete,
+    handleRetry,
+    handleCancel,
+    loadFrameFileList,
+  } = useProjectDetail()
 
   // 加载中
-  if (loading && !currentProject) {
+  if (loading && !project) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
@@ -389,7 +56,7 @@ export default function ProjectDetail() {
   }
 
   // 项目不存在
-  if (!currentProject) {
+  if (!project) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
         <AlertCircle className="h-12 w-12" style={{ color: 'var(--text-tertiary)' }} />
@@ -402,8 +69,6 @@ export default function ProjectDetail() {
     )
   }
 
-  const project = currentProject
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -412,643 +77,59 @@ export default function ProjectDetail() {
       className="space-y-6"
     >
       {/* 顶部导航 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/projects')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h2 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {project.name}
-          </h2>
-          {project.status === 'pending' && <Badge variant="default" dot>等待处理</Badge>}
-          {project.status === 'processing' && <Badge variant="processing" dot>处理中</Badge>}
-          {project.status === 'completed' && <Badge variant="success" dot>已完成</Badge>}
-          {project.status === 'failed' && <Badge variant="error" dot>失败</Badge>}
-        </div>
-        <div className="flex items-center gap-2">
-          {project.status === 'failed' && (
-            <Button variant="secondary" size="sm" onClick={handleRetry}>
-              <RefreshCw className="h-4 w-4" />
-              重试
-            </Button>
-          )}
-          {project.status === 'processing' && (
-            <Button variant="secondary" size="sm" onClick={handleCancel} loading={cancelling}>
-              <StopCircle className="h-4 w-4" />
-              取消处理
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => setShowDeleteModal(true)}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <ProjectHeader
+        project={project}
+        navigate={navigate}
+        cancelling={cancelling}
+        onRetry={handleRetry}
+        onCancel={handleCancel}
+        onDeleteClick={() => setShowDeleteModal(true)}
+      />
 
       {/* 基本信息卡片 */}
-      <Card title="项目信息">
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              <FileVideo className="mr-1 inline h-3 w-3" />
-              视频文件
-            </span>
-            <p className="mt-0.5 truncate" style={{ color: 'var(--text-primary)' }}>
-              {project.videoPaths && project.videoPaths.length > 1
-                ? `${project.videoPaths.length} 个视频文件`
-                : (project.videoPath.split('/').pop() || project.videoPath.split('\\').pop())}
-            </p>
-          </div>
-          <div>
-            <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              <Cpu className="mr-1 inline h-3 w-3" />
-              AI 模型
-            </span>
-            <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>
-              {MODEL_LABEL_MAP[project.model] ?? project.model}
-            </p>
-          </div>
-          <div>
-            <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              <Clock className="mr-1 inline h-3 w-3" />
-              创建时间
-            </span>
-            <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>{formatDate(project.createdAt)}</p>
-          </div>
-          <div>
-            <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              <Film className="mr-1 inline h-3 w-3" />
-              分析模式
-            </span>
-            <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>
-              {ANALYSIS_MODE_LABEL_MAP[project.analysisMode] ?? project.analysisMode}
-            </p>
-          </div>
-          {project.prompt && (
-            <div className="col-span-2">
-              <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                <Wand2 className="mr-1 inline h-3 w-3" />
-                剪辑需求
-              </span>
-              <p className="mt-0.5 text-sm" style={{ color: 'var(--text-primary)' }}>
-                {project.prompt}
-              </p>
-            </div>
-          )}
-          {project.bgmTrackId && (
-            <>
-              <div>
-                <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                  <Music className="mr-1 inline h-3 w-3" />
-                  背景音乐
-                </span>
-                <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>
-                  {AUDIO_MODE_LABEL_MAP[project.audioMode] ?? project.audioMode}
-                </p>
-              </div>
-              <div>
-                <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                  节拍同步
-                </span>
-                <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>
-                  {BEAT_SYNC_MODE_LABEL_MAP[project.beatSyncMode] ?? project.beatSyncMode}
-                </p>
-              </div>
-              {project.transitionType && project.transitionType !== 'none' && (
-                <div>
-                  <span className="block text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    转场效果
-                  </span>
-                  <p className="mt-0.5" style={{ color: 'var(--text-primary)' }}>
-                    {TRANSITION_TYPE_LABEL_MAP[project.transitionType]} ({project.transitionDuration}s)
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </Card>
+      <ProjectInfoCard project={project} />
 
       {/* 处理进度卡片 */}
-      <Card title="处理进度">
-        {/* 总进度条 */}
-        <Progress
-          value={liveProgress?.overallProgress ?? project.progress}
-          size="lg"
-          showPercent
-          label={`总体进度 · ${project.status === 'completed' ? '已完成' : project.status === 'failed' ? '失败' : liveProgress?.message ?? '处理中'}`}
-          className="mb-6"
-        />
+      <ProcessingProgressCard
+        project={project}
+        liveProgress={liveProgress}
+        thinkingContent={thinkingContent}
+        showThinking={showThinking}
+        onToggleThinking={setShowThinking}
+      />
 
-        {/* 步骤列表 */}
-        <div className="space-y-3">
-          {PROCESSING_STEPS.map((step) => (
-            <div key={step.key} className="flex items-center gap-3">
-              <StepIcon step={step.key} currentStep={project.currentStep} status={project.status} />
-              <span
-                className="text-sm"
-                style={{
-                  color:
-                    project.currentStep === step.key && project.status === 'processing'
-                      ? 'var(--color-primary)'
-                      : 'var(--text-secondary)',
-                }}
-              >
-                {step.label}
-              </span>
-              {/* 当前步骤的实时进度消息 */}
-              {liveProgress && liveProgress.step === step.key && project.status === 'processing' && (
-                <span className="ml-auto text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                  {liveProgress.message}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* AI 思考过程 */}
-        {thinkingContent && (
-          <div className="mt-4 rounded-xl border" style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}>
-            <button
-              className="flex w-full items-center gap-2 px-4 py-3 text-left"
-              onClick={() => setShowThinking(!showThinking)}
-            >
-              <Cpu className="h-4 w-4 text-primary-400" />
-              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                老兵AI 思考过程
-              </span>
-              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {thinkingContent.length > 0 && `(${Math.round(thinkingContent.length / 2)}字)`}
-              </span>
-              <svg
-                className={`ml-auto h-4 w-4 transition-transform ${showThinking ? 'rotate-180' : ''}`}
-                style={{ color: 'var(--text-tertiary)' }}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {showThinking && (
-              <div className="border-t px-4 py-3" style={{ borderColor: 'var(--border-color)' }}>
-                <div
-                  className="max-h-64 overflow-y-auto text-xs leading-relaxed whitespace-pre-wrap"
-                  style={{ color: 'var(--text-secondary)', fontFamily: 'system-ui, sans-serif' }}
-                >
-                  {thinkingContent}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 错误信息 */}
-        {project.status === 'failed' && project.errorMessage && (
-          <div
-            className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 p-3"
-            style={{ background: 'rgba(239, 68, 68, 0.05)' }}
-          >
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-            <p className="text-sm text-red-500">{project.errorMessage}</p>
-          </div>
-        )}
-      </Card>
-
-      {/* AI 分析结果卡片 */}
-      {clips.length > 0 && (
-        <Card
-          title={editingClips ? '编辑剪辑片段' : 'AI 剪辑结果'}
-          description={editingClips ? `编辑后 ${editedClips.length} 个片段，保存后将重新渲染` : `共 ${clips.length} 个片段`}
-          actions={
-            !editingClips && (project.status === 'completed' || project.status === 'failed') ? (
-              <Button variant="secondary" size="sm" onClick={handleStartEditClips}>
-                <Pencil className="h-3.5 w-3.5" />
-                编辑剪辑
-              </Button>
-            ) : undefined
-          }
-        >
-          {editingClips ? (
-            <div className="space-y-3">
-              {/* 编辑提示 */}
-              <div
-                className="flex items-center gap-2 rounded-xl border border-primary-500/20 px-3 py-2 text-xs"
-                style={{ background: 'rgba(99, 102, 241, 0.05)', color: 'var(--text-secondary)' }}
-              >
-                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-primary-400" />
-                可以调整时间、删除不需要的片段、调整片段顺序，保存后将跳过 AI 分析直接重新渲染视频
-              </div>
-
-              {/* 编辑中的片段列表 */}
-              {editedClips.map((clip, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.03 }}
-                  className="flex items-center gap-3 rounded-xl border p-3"
-                  style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}
-                >
-                  {/* 序号 + 排序按钮 */}
-                  <div className="flex flex-col items-center gap-0.5">
-                    <button
-                      className="rounded p-0.5 transition-colors hover:bg-white/10 disabled:opacity-30"
-                      onClick={() => moveEditedClipUp(idx)}
-                      disabled={idx === 0}
-                    >
-                      <ArrowUp className="h-3 w-3" style={{ color: 'var(--text-tertiary)' }} />
-                    </button>
-                    <div
-                      className="flex h-6 w-6 items-center justify-center rounded text-xs font-bold"
-                      style={{
-                        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15))',
-                        color: 'var(--color-primary)',
-                      }}
-                    >
-                      {idx + 1}
-                    </div>
-                    <button
-                      className="rounded p-0.5 transition-colors hover:bg-white/10 disabled:opacity-30"
-                      onClick={() => moveEditedClipDown(idx)}
-                      disabled={idx === editedClips.length - 1}
-                    >
-                      <ArrowDown className="h-3 w-3" style={{ color: 'var(--text-tertiary)' }} />
-                    </button>
-                  </div>
-
-                  {/* 时间编辑 */}
-                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                    <div className="flex items-center gap-2">
-                      <Scissors className="h-3.5 w-3.5 shrink-0 text-primary-400" />
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="number"
-                          value={clip.startTime}
-                          onChange={(e) => updateEditedClip(idx, 'startTime', parseFloat(e.target.value) || 0)}
-                          className="w-16 rounded-md border px-2 py-1 text-xs"
-                          style={{
-                            borderColor: 'var(--border-color)',
-                            background: 'var(--bg-primary)',
-                            color: 'var(--text-primary)',
-                          }}
-                          step="0.1"
-                          min="0"
-                        />
-                        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>—</span>
-                        <input
-                          type="number"
-                          value={clip.endTime}
-                          onChange={(e) => updateEditedClip(idx, 'endTime', parseFloat(e.target.value) || 0)}
-                          className="w-16 rounded-md border px-2 py-1 text-xs"
-                          style={{
-                            borderColor: 'var(--border-color)',
-                            background: 'var(--bg-primary)',
-                            color: 'var(--text-primary)',
-                          }}
-                          step="0.1"
-                          min="0"
-                        />
-                        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                          ({Math.round((clip.endTime - clip.startTime) * 10) / 10}秒)
-                        </span>
-                      </div>
-                    </div>
-                    <input
-                      type="text"
-                      value={clip.reason}
-                      onChange={(e) => updateEditedClip(idx, 'reason', e.target.value)}
-                      placeholder="剪辑理由（可选）"
-                      className="w-full rounded-md border px-2 py-1 text-xs"
-                      style={{
-                        borderColor: 'var(--border-color)',
-                        background: 'var(--bg-primary)',
-                        color: 'var(--text-primary)',
-                      }}
-                    />
-                  </div>
-
-                  {/* 删除按钮 */}
-                  <button
-                    className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-red-500/10"
-                    onClick={() => removeEditedClip(idx)}
-                    title="删除片段"
-                  >
-                    <X className="h-4 w-4 text-red-400" />
-                  </button>
-                </motion.div>
-              ))}
-
-              {/* 底部操作按钮 */}
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <Button variant="secondary" size="sm" onClick={handleCancelEditClips} disabled={reRendering}>
-                  取消
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleReRender}
-                  loading={reRendering}
-                  disabled={editedClips.length === 0}
-                >
-                  <Save className="h-3.5 w-3.5" />
-                  {reRendering ? '重新渲染中...' : '保存并重新渲染'}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {clips.map((clip, idx) => (
-                <motion.div
-                  key={clip.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className="flex items-center gap-4 rounded-xl border p-3"
-                  style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}
-                >
-                  <div
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15))',
-                      color: 'var(--color-primary)',
-                    }}
-                  >
-                    {idx + 1}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      <Scissors className="h-3.5 w-3.5 text-primary-400" />
-                      {formatTime(clip.startTime)} — {formatTime(clip.endTime)}
-                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                        ({Math.round(clip.endTime - clip.startTime)}秒)
-                      </span>
-                    </div>
-                    {clip.reason && (
-                      <p className="mt-0.5 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                        {clip.reason}
-                      </p>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </Card>
-      )}
+      {/* AI 剪辑结果卡片 */}
+      <ClipsCard
+        clips={clips}
+        projectStatus={project.status}
+        editingClips={editingClips}
+        editedClips={editedClips}
+        reRendering={reRendering}
+        onStartEdit={handleStartEditClips}
+        onCancelEdit={handleCancelEditClips}
+        onUpdateClip={updateEditedClip}
+        onRemoveClip={removeEditedClip}
+        onMoveUp={moveEditedClipUp}
+        onMoveDown={moveEditedClipDown}
+        onReRender={handleReRender}
+      />
 
       {/* 关键帧预览卡片 */}
       {project.status === 'completed' && (
-        <Card title="关键帧预览" description="AI 分析时抽取的视频关键帧">
-          <button
-            className="flex w-full items-center gap-2 rounded-xl border p-3 text-left transition-colors"
-            style={{ borderColor: 'var(--border-color)', background: 'var(--bg-tertiary)' }}
-            onClick={() => {
-              setShowFrames(!showFrames)
-              if (!showFrames) {
-                // 首次展开时加载不带图片的文件列表（用于显示数量信息）
-                window.electronAPI.getProjectFrameFiles(id!, false).then((files) => {
-                  if (!frameFiles.length) setFrameFiles(files)
-                }).catch(() => {})
-              }
-            }}
-          >
-            <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-              style={{
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15))',
-              }}
-            >
-              <Image className="h-4 w-4 text-primary-400" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                {frameFiles.length > 0 ? `${frameFiles.length} 张关键帧` : '查看关键帧图片'}
-              </p>
-              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {showFrames ? '点击收起' : '点击展开预览'}
-              </p>
-            </div>
-            <ChevronDown
-              className={`h-4 w-4 transition-transform ${showFrames ? 'rotate-180' : ''}`}
-              style={{ color: 'var(--text-tertiary)' }}
-            />
-          </button>
-
-          {/* 关键帧网格 */}
-          {showFrames && frameFiles.length > 0 && (
-            <div className="mt-3 grid grid-cols-4 gap-2">
-              {frameFiles.map((frame) => (
-                <div
-                  key={frame.index}
-                  className="group relative cursor-pointer overflow-hidden rounded-lg border"
-                  style={{ borderColor: 'var(--border-color)' }}
-                  onClick={() => {
-                    if (frame.dataUrl) {
-                      setPreviewFrame(frame)
-                    } else {
-                      window.electronAPI.openPath(frame.path)
-                    }
-                  }}
-                >
-                  {frame.dataUrl ? (
-                    <img
-                      src={frame.dataUrl}
-                      alt={`帧 ${frame.index}`}
-                      className="aspect-video w-full object-cover transition-transform group-hover:scale-105"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div
-                      className="flex aspect-video w-full items-center justify-center"
-                      style={{ background: 'var(--bg-tertiary)' }}
-                    >
-                      {frame.exists ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-primary-400" />
-                      ) : (
-                        <Image className="h-4 w-4" style={{ color: 'var(--text-tertiary)' }} />
-                      )}
-                    </div>
-                  )}
-                  {/* 时间戳标签 */}
-                  <div
-                    className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 text-center text-[10px] font-medium"
-                    style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}
-                  >
-                    {formatTime(frame.timestamp)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+        <KeyframesCard
+          projectId={id}
+          frameFiles={frameFiles}
+          showFrames={showFrames}
+          onToggleFrames={setShowFrames}
+          onLoadFrameFileList={loadFrameFileList}
+        />
       )}
-
-      {/* 关键帧放大查看弹窗 */}
-      <Modal
-        open={!!previewFrame}
-        onClose={() => setPreviewFrame(null)}
-        title={previewFrame ? `关键帧 #${previewFrame.index} — ${formatTime(previewFrame.timestamp)}` : ''}
-      >
-        {previewFrame?.dataUrl && (
-          <div className="flex flex-col items-center gap-3">
-            <img
-              src={previewFrame.dataUrl}
-              alt={`帧 ${previewFrame.index}`}
-              className="max-h-[70vh] w-auto rounded-lg"
-            />
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => window.electronAPI.openPath(previewFrame.path)}
-              >
-                <Eye className="mr-1 h-3.5 w-3.5" />
-                用系统程序查看
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  const dir = previewFrame.path.split('/').slice(0, -1).join('/')
-                  window.electronAPI.openPath(dir)
-                }}
-              >
-                <FolderOpen className="mr-1 h-3.5 w-3.5" />
-                打开所在目录
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       {/* 视频预览区域 */}
-      <Card title="视频预览">
-        <div className="space-y-3">
-          {/* 中间视频（合并后原视频、剪辑后视频） */}
-          {intermediateVideos.map((video) => (
-            <div
-              key={video.path}
-              className={`flex items-center gap-3 rounded-xl border p-3 ${
-                video.exists ? 'cursor-pointer' : 'opacity-50'
-              }`}
-              style={{
-                borderColor: 'var(--border-color)',
-                background: 'var(--bg-tertiary)',
-              }}
-              onClick={() => {
-                if (video.exists) {
-                  window.electronAPI.openPath(video.path)
-                }
-              }}
-            >
-              <div
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15))',
-                }}
-              >
-                <Play className="h-4 w-4 text-primary-400" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                  {video.label}
-                </p>
-                <p className="truncate text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                  {video.path.split('/').pop() || video.path.split('\\').pop()}
-                </p>
-              </div>
-              <Badge variant={video.exists ? 'success' : 'default'}>
-                {video.exists ? '可播放' : '未生成'}
-              </Badge>
-            </div>
-          ))}
+      <VideoPreviewCard project={project} intermediateVideos={intermediateVideos} />
 
-          {/* 最终成片 */}
-          <div
-            className={`flex items-center gap-3 rounded-xl border p-3 ${
-              project.status === 'completed' && project.outputPath ? 'cursor-pointer' : 'opacity-50'
-            }`}
-            style={{
-              borderColor: 'var(--border-active)',
-              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05))',
-            }}
-            onClick={() => {
-              if (project.status === 'completed' && project.outputPath) {
-                window.electronAPI.openPath(project.outputPath)
-              }
-            }}
-          >
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-              style={{
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2))',
-              }}
-            >
-              <Film className="h-4 w-4 text-primary-400" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                最终成片
-              </p>
-              <p className="truncate text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {project.outputPath
-                  ? (project.outputPath.split('/').pop() || project.outputPath.split('\\').pop())
-                  : '处理完成后可预览'}
-              </p>
-            </div>
-            {project.status === 'completed' && project.outputPath ? (
-              <Badge variant="success" dot>已完成</Badge>
-            ) : (
-              <Badge variant="default">未生成</Badge>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      {/* 一键发布暂不可用 — 提示用户手动上传 */}
-      {project.status === 'completed' && (
-        <Card title="发布视频" description="视频处理完成，请手动上传到短视频平台">
-          <div
-            className="flex flex-col items-center gap-4 rounded-xl border p-6"
-            style={{
-              borderColor: 'var(--border-color)',
-              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.03), rgba(139, 92, 246, 0.03))',
-            }}
-          >
-            <div
-              className="flex h-14 w-14 items-center justify-center rounded-2xl"
-              style={{
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1))',
-              }}
-            >
-              <FolderOpen className="h-7 w-7 text-primary-400" />
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                一键发布功能暂不可用
-              </p>
-              <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                视频已处理完成，请前往输出目录找到剪辑后的视频文件，
-                <br />
-                手动上传到快手、抖音等短视频平台。
-              </p>
-              <p className="mt-3 rounded-lg px-3 py-2 text-xs font-mono" style={{ color: 'var(--color-primary)', background: 'rgba(99, 102, 241, 0.08)' }}>
-                {project.outputPath}
-              </p>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* 发布弹窗 — 一键发布暂不可用 */}
-      {/* {publishPlatform && id && (
-        <PublishModal
-          open={!!publishPlatform}
-          onClose={closePublishModal}
-          projectId={id}
-          projectName={project.name}
-          platform={publishPlatform}
-          onSubmit={handlePublish}
-          uploadProgress={uploadProgress?.platform === publishPlatform ? uploadProgress : null}
-        />
-      )} */}
+      {/* 发布卡片 */}
+      <PublishCard project={project} />
 
       {/* 删除确认弹窗 */}
       <Modal
