@@ -25,7 +25,6 @@ import {
   Music,
   Image,
   Eye,
-  HardDrive,
   ChevronDown,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
@@ -35,7 +34,7 @@ import { Card } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { PublishModal } from '../components/PublishModal'
 import { useProjectStore } from '../stores/projectStore'
-import type { Project, ProjectStatus, ProcessingStep, Clip, UploadPlatform, UploadProgress, UploadRecord, IntermediateVideo, ClipFileInfo, FrameFileInfo } from '@shared/types'
+import type { Project, ProjectStatus, ProcessingStep, Clip, UploadPlatform, UploadProgress, UploadRecord, IntermediateVideo, FrameFileInfo } from '@shared/types'
 import type { PipelineProgress } from '@shared/pipeline'
 import { MODEL_LABEL_MAP, ANALYSIS_MODE_LABEL_MAP, AUDIO_MODE_LABEL_MAP, BEAT_SYNC_MODE_LABEL_MAP, TRANSITION_TYPE_LABEL_MAP } from '@shared/constants'
 import { PLATFORM_CONFIGS } from '@shared/platform'
@@ -108,8 +107,6 @@ export default function ProjectDetail() {
   const [thinkingContent, setThinkingContent] = useState<string>('')
   const [showThinking, setShowThinking] = useState(false)
 
-  // 剪辑片段视频文件列表
-  const [clipFiles, setClipFiles] = useState<ClipFileInfo[]>([])
   // 关键帧图片列表
   const [frameFiles, setFrameFiles] = useState<FrameFileInfo[]>([])
   // 关键帧展开状态
@@ -191,17 +188,6 @@ export default function ProjectDetail() {
     window.electronAPI.getIntermediateVideos(id).then(setIntermediateVideos).catch(() => {})
   }, [id, currentProject?.status])
 
-  /** 加载剪辑片段视频文件和关键帧图片（处理完成时） */
-  useEffect(() => {
-    if (!id) return
-    if (currentProject?.status !== 'completed') {
-      setClipFiles([])
-      setFrameFiles([])
-      return
-    }
-    window.electronAPI.getProjectClipFiles(id).then(setClipFiles).catch(() => {})
-    // 关键帧暂不加载 base64，等用户展开时再加载
-  }, [id, currentProject?.status])
 
   /** 展开关键帧时加载图片 Data URL */
   useEffect(() => {
@@ -543,9 +529,7 @@ export default function ProjectDetail() {
       {clips.length > 0 && (
         <Card title="AI 剪辑结果" description={`共 ${clips.length} 个片段`}>
           <div className="space-y-3">
-            {clips.map((clip, idx) => {
-              const clipFile = clipFiles[idx]
-              return (
+            {clips.map((clip, idx) => (
                 <motion.div
                   key={clip.id}
                   initial={{ opacity: 0, x: -10 }}
@@ -577,58 +561,9 @@ export default function ProjectDetail() {
                       </p>
                     )}
                   </div>
-                  {/* 片段视频文件操作 */}
-                  {clipFile && clipFile.exists && (
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors"
-                        style={{
-                          background: 'rgba(99, 102, 241, 0.1)',
-                          color: 'var(--color-primary)',
-                        }}
-                        onClick={() => window.electronAPI.openPath(clipFile.path)}
-                        title="用系统播放器打开片段视频"
-                      >
-                        <Play className="h-3 w-3" />
-                        播放
-                      </button>
-                      <button
-                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors"
-                        style={{
-                          background: 'rgba(99, 102, 241, 0.06)',
-                          color: 'var(--text-secondary)',
-                        }}
-                        onClick={() => window.electronAPI.openPath(clipFile.path.split('/').slice(0, -1).join('/'))}
-                        title="打开片段所在目录"
-                      >
-                        <FolderOpen className="h-3 w-3" />
-                      </button>
-                    </div>
-                  )}
                 </motion.div>
-              )
-            })}
+              ))}
           </div>
-          {/* 片段视频文件汇总 */}
-          {clipFiles.length > 0 && (
-            <div className="mt-4 flex items-center gap-2 rounded-xl border p-3" style={{ borderColor: 'var(--border-color)', background: 'rgba(99, 102, 241, 0.03)' }}>
-              <HardDrive className="h-4 w-4 text-primary-400" />
-              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                clips 目录下共 {clipFiles.length} 个视频片段文件
-              </span>
-              <button
-                className="ml-auto rounded-lg px-2.5 py-1 text-xs font-medium transition-colors"
-                style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--color-primary)' }}
-                onClick={() => {
-                  if (clipFiles[0]) {
-                    window.electronAPI.openPath(clipFiles[0].path.split('/').slice(0, -1).join('/'))
-                  }
-                }}
-              >
-                打开目录
-              </button>
-            </div>
-          )}
         </Card>
       )}
 
