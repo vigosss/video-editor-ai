@@ -62,7 +62,8 @@ jobs:
           name: win-build
           path: |
             out/*.exe
-            out/win*/
+            out/*.exe.blockmap
+            out/latest.yml
           retention-days: 30
 
   release:
