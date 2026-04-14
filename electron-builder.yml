@@ -69,5 +69,5 @@ nsis:
 # ==========================================
 publish:
   provider: github
-  owner: ming
+  owner: vigosss
   repo: video-editor-ai
