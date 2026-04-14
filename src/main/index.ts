@@ -5,6 +5,7 @@ dotenvConfig({ path: join(__dirname, '../../.env.local') })
 
 import { app, BrowserWindow, shell, ipcMain, protocol, net } from 'electron'
 import { pathToFileURL } from 'url'
+import { existsSync } from 'fs'
 
 const is = {
   dev: !app.isPackaged,
@@ -133,9 +134,25 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(() => {
   // 注册 local-video:// 自定义协议（用于渲染进程播放本地视频）
+  // URL 格式：local-video://media/<encodeURIComponent(文件路径)>
+  // 使用 URL pathname 部分传递路径，避免 hostname 小写化等规范化问题
   protocol.handle('local-video', (request) => {
-    const filePath = decodeURIComponent(request.url.replace('local-video://', ''))
-    return net.fetch(pathToFileURL(filePath).href)
+    try {
+      const url = new URL(request.url)
+      // url.pathname = "/media/<encoded-path>"
+      const encodedPath = url.pathname.replace(/^\/media\//, '')
+      const filePath = decodeURIComponent(encodedPath)
+
+      if (!filePath || !existsSync(filePath)) {
+        console.error(`[local-video] 文件不存在: ${filePath}`)
+        return new Response('File not found', { status: 404 })
+      }
+
+      return net.fetch(pathToFileURL(filePath).href)
+    } catch (err) {
+      console.error('[local-video] 协议处理失败:', err)
+      return new Response('Internal error', { status: 500 })
+    }
   })
 
   // 设置应用用户模型 ID（Windows）

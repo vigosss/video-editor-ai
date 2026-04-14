@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
+import { toast } from 'react-toastify'
 import clsx from 'clsx'
 import {
   Video,
@@ -17,6 +18,7 @@ import {
   FolderOpen,
   Upload,
   ChevronDown,
+  AlertCircle,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 
@@ -99,7 +101,7 @@ export default function VideoPlayer() {
         id: generateId(),
         name,
         path: p,
-        url: `local-video://${encodeURIComponent(p)}`,
+        url: `local-video://media/${encodeURIComponent(p)}`,
       }
     })
 
@@ -301,6 +303,18 @@ export default function VideoPlayer() {
     }
   }, [currentIndex])
 
+  /** 视频加载失败处理 */
+  const handleVideoError = useCallback(() => {
+    const video = videoRef.current
+    if (!video || !currentItem) return
+    const mediaError = video.error
+    const msg = mediaError
+      ? `视频加载失败 (错误码: ${mediaError.code})`
+      : '视频加载失败'
+    toast.error(`${currentItem.name}: ${msg}`)
+    console.error('[VideoPlayer] 加载失败:', currentItem.path, mediaError)
+  }, [currentItem])
+
   // 当 currentIndex 变化时自动播放
   useEffect(() => {
     const video = videoRef.current
@@ -467,6 +481,7 @@ export default function VideoPlayer() {
                 onLoadedMetadata={handleLoadedMetadata}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
+                onError={handleVideoError}
               />
             ) : (
               /* 空状态 */
