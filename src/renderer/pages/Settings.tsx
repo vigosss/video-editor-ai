@@ -23,7 +23,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useAppStore } from '../stores/appStore'
 import type { GLMModel, AnalysisMode, WhisperModelSize, OutputFormat, Resolution } from '@shared/types'
 import { MODEL_OPTIONS, ANALYSIS_MODE_OPTIONS, DEFAULT_SYSTEM_PROMPT } from '@shared/constants'
-
+import packageJson from '../../../package.json'
 
 const WHISPER_MODEL_OPTIONS = [
   { value: 'tiny', label: 'Tiny（最快，精度较低）' },
@@ -364,6 +364,13 @@ export default function Settings() {
           <Save className="h-4 w-4" />
           保存设置
         </Button>
+      </div>
+
+      {/* 版本号 */}
+      <div className="flex justify-center pb-2">
+        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          老兵AI智剪 v{packageJson.version}
+        </span>
       </div>
     </motion.div>
   )

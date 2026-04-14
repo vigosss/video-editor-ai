@@ -5,7 +5,6 @@ import {
   Home,
   FolderOpen,
   Settings,
-  Scissors,
   ChevronLeft,
   ChevronRight,
   LayoutTemplate,
@@ -52,10 +51,14 @@ export function Sidebar() {
           sidebarCollapsed ? 'h-16 justify-center' : 'h-16 gap-3',
         )}
       >
-        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-accent-500">
-          <Scissors className="h-5 w-5 text-white" />
+        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg">
           {/* Logo 辉光 */}
           <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 opacity-50 blur-md" />
+          <img
+            src="/logo.png"
+            alt="Logo"
+            className="relative z-10 h-full w-full object-contain"
+          />
         </div>
         {!sidebarCollapsed && (
           <>

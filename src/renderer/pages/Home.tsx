@@ -43,13 +43,17 @@ export default function Home() {
           transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
           className="relative mb-8"
         >
-          <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500">
-            <Scissors className="h-10 w-10 text-white" />
+          <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-primary-500/30 bg-gradient-to-br from-primary-500/20 to-accent-500/20">
             {/* 脉冲辉光 */}
             <motion.div
               className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500"
               animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0, 0.5] }}
               transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <img
+              src="/logo.png"
+              alt="Logo"
+              className="relative z-10 h-16 w-16 object-contain rounded-xl"
             />
           </div>
         </motion.div>
