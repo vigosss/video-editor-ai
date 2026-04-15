@@ -698,6 +698,7 @@ export async function analyzeVideo(
   onProgress?.(100, `分析完成，共识别 ${clips.length} 个推荐片段`)
 
   console.log(`[GLM] 分析完成: ${clips.length} 个片段`)
+  console.log(`[GLM] 片段顺序:`, clips.map((c, i) => `${i+1}. ${c.startTime}s-${c.endTime}s ${c.reason.substring(0, 20)}`).join(' | '))
 
   return {
     clips,
