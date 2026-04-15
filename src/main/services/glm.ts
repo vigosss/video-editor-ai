@@ -700,8 +700,21 @@ export async function analyzeVideo(
   console.log(`[GLM] 分析完成: ${clips.length} 个片段`)
   console.log(`[GLM] 片段顺序:`, clips.map((c, i) => `${i+1}. ${c.startTime}s-${c.endTime}s ${c.reason.substring(0, 20)}`).join(' | '))
 
+  // 强制按外观→内饰顺序重排（防止 AI 按时间戳排序）
+  const EXTERIOR_LABELS = ['外观-正面', '外观-车头', '外观-车灯', '外观-车侧', '外观-车后侧', '外观-车尾', '外观-驾驶室']
+  const INTERIOR_LABELS = ['内饰-卡座区', '内饰-厨房区', '内饰-床铺区', '内饰-卫生间']
+  const getOrder = (reason: string) => {
+    const extIdx = EXTERIOR_LABELS.findIndex(l => reason.includes(l))
+    if (extIdx !== -1) return extIdx
+    const intIdx = INTERIOR_LABELS.findIndex(l => reason.includes(l))
+    if (intIdx !== -1) return EXTERIOR_LABELS.length + intIdx
+    return EXTERIOR_LABELS.length + INTERIOR_LABELS.length
+  }
+  const sortedClips = [...clips].sort((a, b) => getOrder(a.reason) - getOrder(b.reason))
+  console.log(`[GLM] 重排后顺序:`, sortedClips.map((c, i) => `${i+1}. ${c.startTime}s-${c.endTime}s ${c.reason.substring(0, 20)}`).join(' | '))
+
   return {
-    clips,
+    clips: sortedClips,
     rawResponse: result.content,
     reasoningContent: result.reasoningContent,
     usage: result.usage
